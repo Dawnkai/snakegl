@@ -1,5 +1,10 @@
 #include "libs.h"
 
+#define FOV 90.0f
+#define NEAR_PLANE 0.1f
+#define FAR_PLANE 100.0f
+#define CAMERA_SPEED 0.05f
+
 int WIDTH = 0;
 int HEIGHT = 0;
 
@@ -28,30 +33,21 @@ void Material::sendToShader(ShaderProgram *sp) {
 
 // MESH CLASS
 
-// Create mesh from raw data or object instance
-void Mesh::initMesh(Vertex *vertexData, const unsigned &nrVertices, GLuint *indexData, const unsigned &nrIndices, ShaderProgram *sp) {
-    this->nrIndices = nrIndices;
-    this->nrVertices = nrVertices;
+// Create mesh from object instance
+void Mesh::initMesh(Object *object) {
+	this->nrIndices = object->getSizeIndices();
+	this->nrVertices = object->getSizeVertices();
 
 	glCreateVertexArrays(1, &this->VAO);
 	glBindVertexArray(this->VAO);
 
 	glGenBuffers(1, &this->VBO);
 	glBindBuffer(GL_ARRAY_BUFFER, this->VBO);
-	glBufferData(GL_ARRAY_BUFFER, this->nrVertices * sizeof(Vertex), vertexData, GL_STATIC_DRAW);
+	glBufferData(GL_ARRAY_BUFFER, this->nrVertices * sizeof(Vertex), object->getVertices(), GL_STATIC_DRAW);
 
 	glGenBuffers(1, &this->EBO);
 	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, this->EBO);
-	glBufferData(GL_ELEMENT_ARRAY_BUFFER, this->nrIndices * sizeof(GLuint), indexData, GL_STATIC_DRAW);
-
-    glVertexAttribPointer(sp->a("position"), 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (GLvoid*)offsetof(Vertex, position));
-	glVertexAttribPointer(sp->a("color"), 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (GLvoid*)offsetof(Vertex, color));
-	glVertexAttribPointer(sp->a("texcoord"), 2, GL_FLOAT, GL_FALSE, sizeof(Vertex), (GLvoid*)offsetof(Vertex, texcoord));
-	glVertexAttribPointer(sp->a("normal"), 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (GLvoid*)offsetof(Vertex, normal));
-}
-
-void Mesh::initMesh(Object *object, ShaderProgram *sp) {
-    this->initMesh(object->getVertices(), object->getSizeVertices(), object->getIndices(), object->getSizeIndices(), sp);
+	glBufferData(GL_ELEMENT_ARRAY_BUFFER, this->nrIndices * sizeof(GLuint), object->getIndices(), GL_STATIC_DRAW);
 }
 
 // Update uniform values in shader program before rendering
@@ -60,7 +56,14 @@ void Mesh::updateUniforms(ShaderProgram *sp) {
 }
 
 // Render object on screen through shader program
-void Mesh::render(ShaderProgram *sp) {
+void Mesh::render(ShaderProgram *sp, Material material) {
+	material.sendToShader(sp);
+
+	glVertexAttribPointer(sp->a("position"), 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (GLvoid*)offsetof(Vertex, position));
+	glVertexAttribPointer(sp->a("color"), 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (GLvoid*)offsetof(Vertex, color));
+	glVertexAttribPointer(sp->a("texcoord"), 2, GL_FLOAT, GL_FALSE, sizeof(Vertex), (GLvoid*)offsetof(Vertex, texcoord));
+	glVertexAttribPointer(sp->a("normal"), 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (GLvoid*)offsetof(Vertex, normal));
+
     this->updateUniforms(sp);
     sp->use();
     if (this->nrIndices == 0) glDrawArrays(GL_TRIANGLES, 0, this->nrVertices);
@@ -116,7 +119,7 @@ Game::Game(const char *title, int width, int height) {
     this->title = title;
     this->width = width;
     this->height = height;
-    this->cameraPosition = glm::vec3(0.0f, 0.0f, -1.0f);
+    this->cameraPosition = glm::vec3(0.0f, 0.0f, 1.0f);
     this->init();
 }
 
@@ -130,13 +133,6 @@ void Game::error_callback(int error, const char* description) {
 	fputs(description, stderr);
 }
 
-// Key input handler
-void Game::keyCallback(GLFWwindow* window, int key, int scancode, int action, int mods) {
-    if (action==GLFW_PRESS) {
-        if (key==GLFW_KEY_ESCAPE) glfwSetWindowShouldClose(window, GL_TRUE);
-	}
-}
-
 // Window resizing callback
 void Game::windowResizeCallback(GLFWwindow* window, int width, int height) {
     glViewport(0,0,width,height);
@@ -144,6 +140,7 @@ void Game::windowResizeCallback(GLFWwindow* window, int width, int height) {
 	glfwGetFramebufferSize(window, &WIDTH, &HEIGHT);
 }
 
+// Initialize Game class
 void Game::init() {
     GLenum err;
 
@@ -172,50 +169,106 @@ void Game::init() {
 		exit(EXIT_FAILURE);
 	}
 
+	// Disable cursor
+	glfwSetInputMode(this->window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+
 	// Start game
 	this->createGame();
 }
 
+// Create entire game enivornment
 void Game::createGame() {
     // Set clear color to black
-	glClearColor(0,0,0,1);
+	glClearColor(0, 0, 0, 1);
 
 	// Enable Z algorithm
 	glEnable(GL_DEPTH_TEST);
 
 	// Enable callbacks
 	glfwSetWindowSizeCallback(this->window, Game::windowResizeCallback);
-	glfwSetKeyCallback(this->window, Game::keyCallback);
 
 	// Load textures and shaders
-	this->sp=new ShaderProgram("vertex_shader.glsl",NULL,"fragment_shader.glsl");
-	this->lightningData[0] = glm::vec3(0.0f, 0.0f, 2.0f);
+	this->sp=new ShaderProgram("vertex_shader.glsl", NULL, "fragment_shader.glsl");
 
-	// Set view matrix
-	this->viewMatrix = glm::lookAt(
-        glm::vec3(0.0f,0.0f,1.0f),
-        glm::vec3(0.0f,0.0f,0.0f),
-        glm::vec3(0.0f,1.0f,0.0f)
-	);
-
-	// Get screen size and set projection matrix
+	// Get screen size
 	glfwGetFramebufferSize(this->window, &WIDTH, &HEIGHT);
-	this->projectionMatrix = glm::perspective(glm::radians(90.0f), static_cast<float>(WIDTH) / HEIGHT, 0.1f, 100.0f);
 }
 
+// Setup before rendering objects
 void Game::setupScene() {
+
+	// Set view and projection matrix
+	this->viewMatrix = glm::lookAt(
+		this->cameraPosition,
+		this->cameraPosition - glm::vec3(0.0f, 0.0f, 1.0f),
+		glm::vec3(0.0f, 1.0f, 0.0f)
+	);
+
+	this->projectionMatrix = glm::perspective(
+		glm::radians(FOV),
+		static_cast<float>(WIDTH) / HEIGHT,
+		NEAR_PLANE,
+		FAR_PLANE
+	);
+
 	glUniformMatrix4fv(this->sp->u("viewMatrix"), 1, GL_FALSE, glm::value_ptr(this->viewMatrix));
 	glUniformMatrix4fv(this->sp->u("projectionMatrix"), 1, GL_FALSE, glm::value_ptr(this->projectionMatrix));
 
+	// Enable object attributes
 	glEnableVertexAttribArray(this->sp->a("position"));
 	glEnableVertexAttribArray(this->sp->a("color"));
 	glEnableVertexAttribArray(this->sp->a("texcoord"));
 	glEnableVertexAttribArray(this->sp->a("normal"));
 
-	glUniform3fv(this->sp->u("lightPos0"), 1, glm::value_ptr(this->lightningData[0]));
+	// Enable lightning and camera
+	glUniform3fv(this->sp->u("lightPos0"), 1, glm::value_ptr(*(this->lights[0])));
 	glUniform3fv(this->sp->u("cameraPosition"), 1, glm::value_ptr(this->cameraPosition));
 }
 
+// Pool all inputs
+void Game::updateInput() {
+	this->updateKeyboard();
+	this->updateMouse();
+	this->camera.updateCamera(this->dt, -1, this->mouseOffsetX, this->mouseOffsetY);
+}
+
+// Pool keybaord input
+void Game::updateKeyboard() {
+	if (glfwGetKey(this->window, GLFW_KEY_W) == GLFW_PRESS) this->cameraPosition.z -= CAMERA_SPEED;
+	if (glfwGetKey(this->window, GLFW_KEY_S) == GLFW_PRESS) this->cameraPosition.z += CAMERA_SPEED;
+	if (glfwGetKey(this->window, GLFW_KEY_A) == GLFW_PRESS) this->cameraPosition.x -= CAMERA_SPEED;
+	if (glfwGetKey(this->window, GLFW_KEY_D) == GLFW_PRESS) this->cameraPosition.x += CAMERA_SPEED;
+	if (glfwGetKey(this->window, GLFW_KEY_Z) == GLFW_PRESS) this->cameraPosition.y -= CAMERA_SPEED;
+	if (glfwGetKey(this->window, GLFW_KEY_C) == GLFW_PRESS) this->cameraPosition.y += CAMERA_SPEED;
+	if (glfwGetKey(this->window, GLFW_KEY_ESCAPE) == GLFW_PRESS) glfwSetWindowShouldClose(this->window, GL_TRUE);
+}
+
+// Pool mouse input
+void Game::updateMouse() {
+	glfwGetCursorPos(this->window, &this->mousePosX, &this->mousePosY);
+
+	if (this->firstMouse) {
+		this->lastMousePosX = this->mousePosX;
+		this->lastMousePosY = this->mousePosY;
+		this->firstMouse = false;
+	}
+
+	this->mouseOffsetX = this->mousePosX - this->lastMousePosX;
+	this->mouseOffsetY = this->lastMousePosY - this->mousePosY;
+
+	this->lastMousePosX = this->mousePosX;
+	this->lastMousePosY = this->mousePosY;
+}
+
+// Update delta time for smooth fps
+// Get time between frames
+void Game::tick() {
+	this->curTime = static_cast<float>(glfwGetTime());
+	this->dt = this->curTime - this->lastTime;
+	this->lastTime = this->curTime;
+}
+
+// Teardown after rendering objects
 void Game::cleanScene() {
 	glDisableVertexAttribArray(this->sp->a("vertex"));
 	glDisableVertexAttribArray(this->sp->a("color")); 
@@ -225,6 +278,8 @@ void Game::cleanScene() {
 
 // Drawing function
 void Game::drawScene() {
+	// Update delta time
+	this->tick();
 
 	// Clear previous buffer
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -232,20 +287,16 @@ void Game::drawScene() {
 	// Activate shader program
     this->sp->use();
 
-	Floor floor;
-
-	Mesh test(&floor, this->sp);
-
 	// Setup the scene
 	this->setupScene();
 
 	// Add textures to objects
 	glUniform1i(this->sp->u("texture0"), 0);
 
-	this->material0.sendToShader(this->sp);
-
 	// Draw objects
-	test.render(this->sp);
+	for(int i = 0; i < this->models.size(); i++) {
+		this->models.at(i)->getMesh()->render(this->sp, this->models.at(i)->getMaterial());
+	}
 
 	// Clean the scene
 	this->cleanScene();
@@ -254,6 +305,110 @@ void Game::drawScene() {
     glfwSwapBuffers(this->window);
 }
 
+
+// Getters
+GLuint *Game::getTexture(int pos) {
+    return this->textures.at(pos);
+}
+
+glm::vec3 *Game::getLight(int pos) {
+    return this->lights.at(pos);
+}
+
+Material *Game::getMaterial(int pos) {
+    return this->materials.at(pos);
+}
+
+Model *Game::getModel(int pos) {
+	return this->models.at(pos);
+}
+
+
+// Setters
+void Game::addTexture(GLuint texture) {
+    this->textures.push_back(&texture);
+}
+
+void Game::addLight(glm::vec3 *light) {
+    this->lights.push_back(light);
+}
+
+void Game::addMaterial(Material material) {
+    this->materials.push_back(&material);
+}
+
+void Game::addModel(Model *model) {
+	this->addTexture(model->getTexture());
+	this->addMaterial(model->getMaterial());
+	this->models.push_back(model);
+}
+
+
+// Removers
+void Game::removeTexture(int pos) {
+    std::vector<GLuint *>::iterator iter = this->textures.begin() + pos;
+    this->textures.erase(iter);
+}
+
+void Game::removeLight(int pos) {
+    std::vector<glm::vec3 *>::iterator iter = this->lights.begin() + pos;
+    this->lights.erase(iter);
+}
+
+void Game::removeMaterial(int pos) {
+    std::vector<Material *>::iterator iter = this->materials.begin() + pos;
+    this->materials.erase(iter);
+}
+
+void Game::removeModel(int pos) {
+	std::vector<Model *>::iterator iter = this->models.begin() + pos;
+    this->models.erase(iter);
+}
+//-------------------------------------------------------------------------------------------------------------------------
+
+
+// CAMERA CLASS
+void Camera::rotateCamera(const float &dt, const double &offsetX, const double &offsetY) {
+	this->pitch += static_cast<GLfloat>(offsetY) * this->sensitivity * dt;
+	this->yaw += static_cast<GLfloat>(offsetX) * this->sensitivity * dt;
+
+	// Restrict camera rotation
+	if (this->pitch > 80.0f) this->pitch = 80.0f;
+	else if (this->pitch < -80.0f) this->pitch = -80.0f;
+
+	if (this->yaw > 360.0f || this->yaw < -360.0f) this->yaw = 0.0f;
+}
+
+
+void Camera::moveCamera(const float &dt, const int direction) {
+	switch(direction) {
+		case 0:
+			this->position += this->front * this->movementSpeed * dt;
+			break;
+		case 1:
+			this->position -= this->front * this->movementSpeed * dt;
+			break;
+		case 2:
+			this->position -= this->right * this->movementSpeed * dt;
+			break;
+		case 3:
+			this->position += this->right * this->movementSpeed * dt;
+			break;
+		default:
+			break;
+	}
+}
+
+
+void Camera::initCamera() {
+	this->front.x = cos(glm::radians(this->yaw)) * cos(glm::radians(this->pitch));
+	this->front.y = sin(glm::radians(this->pitch));
+	this->front.z = sin(glm::radians(this->yaw)) * cos(glm::radians(this->pitch));
+
+	this->front = glm::normalize(this->front);
+	this->right = glm::normalize(glm::cross(this->front, this->worldUp));
+	this->up = glm::normalize(glm::cross(this->right, this->front));
+}
 //-------------------------------------------------------------------------------------------------------------------------
 
 
@@ -284,56 +439,3 @@ GLuint readTexture(const char* filename) {
 
 	return tex;
 }
-
-void Game::addTexture(GLuint *texture) {
-    this->textures.push_back(texture);
-}
-
-void Game::addLight(glm::vec3 *light) {
-    this->lights.push_back(light);
-}
-
-void Game::addMaterial(Material *material) {
-    this->materials.push_back(material);
-}
-
-void Game::addObject(Object *object) {
-    this->objects.push_back(object);
-}
-
-void Game::removeTexture(int pos) {
-    std::vector<GLuint *>::iterator iter = this->textures.begin() + pos;
-    this->textures.erase(iter);
-}
-
-void Game::removeLight(int pos) {
-    std::vector<glm::vec3 *>::iterator iter = this->lights.begin() + pos;
-    this->lights.erase(iter);
-}
-
-void Game::removeMaterial(int pos) {
-    std::vector<Material *>::iterator iter = this->materials.begin() + pos;
-    this->materials.erase(iter);
-}
-
-void Game::removeObject(int pos) {
-    std::vector<Object *>::iterator iter = this->objects.begin() + pos;
-    this->objects.erase(iter);
-}
-
-GLuint *Game::getTexture(int pos) {
-    return this->textures.at(pos);
-}
-
-glm::vec3 *Game::getLight(int pos) {
-    return this->lights.at(pos);
-}
-
-Material *Game::getMaterial(int pos) {
-    return this->materials.at(pos);
-}
-
-Object *Game::getObject(int pos) {
-    return this->objects.at(pos);
-}
-

@@ -1,6 +1,9 @@
 #ifndef LIBS_H_
 #define LIBS_H_
 
+#define MOVEMENT_SPEED 3.0f
+#define SENSITIVITY 5.0f
+
 #include <GL/glew.h>
 #include <GLFW/glfw3.h>
 #include <glm/glm.hpp>
@@ -15,6 +18,9 @@
 
 extern int HEIGHT;
 extern int WIDTH;
+
+// STANDARD FUNCTIONS
+GLuint readTexture(const char* filename);
 
 // STRUCTS
 struct Vertex {
@@ -108,38 +114,16 @@ class Mesh {
         GLuint VBO;
         GLuint EBO;
 
-        void initMesh(Vertex *vertexData, const unsigned &nrVertices, GLuint *indexData, const unsigned &nrIndices, ShaderProgram *sp);
-        void initMesh(Object *object, ShaderProgram *sp);
+        void initMesh(Vertex *vertexData, const unsigned &nrVertices, GLuint *indexData, const unsigned &nrIndices);
+        void initMesh(Object *object);
         void updateUniforms(ShaderProgram *sp);
 
     public:
-        Mesh(Vertex *vertexData, const unsigned &nrVertices,
-             GLuint *indexData, const unsigned &nrIndices,
-             ShaderProgram *sp) {
-            this->initMesh(vertexData, nrVertices, indexData, nrIndices, sp);
-            this->update();
-        }
 
-        Mesh(Vertex *vertexData, const unsigned &nrVertices,
-             GLuint *indexData, const unsigned &nrIndices,
-             ShaderProgram *sp, glm::vec3 position, glm::vec3 rotation, glm::vec3 scale) {
-            this->position = position;
-            this->rotation = rotation;
-            this->scale = scale;
-            this->initMesh(vertexData, nrVertices, indexData, nrIndices, sp);
-            this->update();
-        }
+        Mesh() {}
 
-        Mesh(Object *object, ShaderProgram *sp) {
-            this->initMesh(object, sp);
-            this->update();
-        }
-
-        Mesh(Object *object, ShaderProgram *sp, glm::vec3 position, glm::vec3 rotation, glm::vec3 scale) {
-            this->position = position;
-            this->rotation = rotation;
-            this->scale = scale;
-            this->initMesh(object, sp);
+        Mesh(Object *object) {
+            this->initMesh(object);
             this->update();
         }
 
@@ -150,10 +134,79 @@ class Mesh {
         }
 
         void update();
-        void render(ShaderProgram *sp);
+        void render(ShaderProgram *sp, Material material);
         void setPosition(const glm::vec3 position);
         void setRotation(const glm::vec3 rotation);
         void setScale(const glm::vec3 scale);
+};
+
+
+class Model {
+    private:
+        Material material;
+        glm::mat4 modelMatrix;
+        GLuint texture;
+        Object *object;
+        Mesh *mesh;
+
+
+    public:
+        Model(const char *texturePath, Object *object, glm::mat4 modelMatrix = glm::mat4(1.0f)) {
+            this->modelMatrix = modelMatrix;
+            this->texture = readTexture(texturePath);
+            this->material = Material();
+            this->material.setDiffuseTex(this->texture);
+            this->object = object;
+            this->mesh = new Mesh(this->object);
+        }
+
+        Mesh *getMesh() { return this->mesh; }
+        GLuint getTexture() { return this->texture; }
+        Material getMaterial() { return this->material; }
+        Object *getObject() { return this->object; }
+
+        ~Model() {}
+};
+
+
+class Camera {
+    private:
+        glm::mat4 viewMatrix = glm::mat4(1.0f);
+        glm::vec3 worldUp = glm::vec3(0.0f, 1.0f, 0.0f);
+        glm::vec3 position = glm::vec3(0.0f, 0.0f, 1.0f);
+        glm::vec3 direction = glm::vec3(0.0f, 0.0f, 1.0f);
+        glm::vec3 front;
+        glm::vec3 right;
+        glm::vec3 up;
+
+        GLfloat pitch = 0.0f;
+        GLfloat yaw = -90.0f;
+        GLfloat roll = 0.0f;
+        GLfloat movementSpeed = MOVEMENT_SPEED;
+        GLfloat sensitivity = SENSITIVITY;
+
+        void rotateCamera(const float &dt, const double &offsetX, const double &offsetY);
+        void moveCamera(const float &dt, const int direction);
+        void initCamera();
+
+    public:
+        Camera() {
+            this->initCamera();
+        }
+
+        ~Camera() {}
+
+        const glm::mat4 getViewMatrix() {
+            this->viewMatrix = glm::lookAt(this->position, this->position + this->front, this->worldUp);
+            return this->viewMatrix;
+        }
+
+        const glm::vec3 getPosition() const { return this->position; }
+
+        void updateCamera(const float &dt, const int direction, const double &offsetX, const double &offsetY) {
+            this->rotateCamera(dt, offsetX, offsetY);
+            this->moveCamera(dt, direction);
+        }
 };
 
 
@@ -161,57 +214,67 @@ class Game {
     private:
         GLFWwindow *window;
         ShaderProgram *sp;
+        Camera camera;
         glm::mat4 viewMatrix;
         glm::mat4 projectionMatrix;
-        GLuint textureData[5];
-        glm::vec3 lightningData[5];
-        Material material0;
         glm::vec3 cameraPosition;
 
         std::vector<GLuint*> textures;
         std::vector<glm::vec3*> lights;
         std::vector<Material*> materials;
         std::vector<Mesh*> meshes;
-        std::vector<Object*> objects;
+        std::vector<Model*> models;
 
         int width;
         int height;
         const char* title;
 
+        // Delta time (FPS related)
+        float dt = 0.0f;
+        float curTime = 0.0f;
+        float lastTime = 0.0f;
+
+        // Mouse position for mouse movement
+        double lastMousePosX = 0.0f;
+        double lastMousePosY = 0.0f;
+        double mousePosX = 0.0f;
+        double mousePosY = 0.0f;
+        double mouseOffsetX = 0.0f;
+        double mouseOffsetY = 0.0f;
+        bool firstMouse = true;
+
         void init();
         void createGame();
-        void resetWindow();
         void setupScene();
         void cleanScene();
+        void updateKeyboard();
+        void updateMouse();
+        void tick();
         static void error_callback(int error, const char* description);
-        static void keyCallback(GLFWwindow* window,int key,int scancode,int action,int mods);
         static void windowResizeCallback(GLFWwindow* window,int width,int height);
 
     public:
         Game(const char *title, int width, int height);
         virtual ~Game();
         void drawScene();
-        void update();
+        void updateInput();
 
-        void addTexture(GLuint *texture);
+        void addTexture(GLuint texture);
         void addLight(glm::vec3 *light);
-        void addMaterial(Material *material);
-        void addObject(Object *object);
+        void addMaterial(Material material);
+        void addModel(Model *model);
 
         void removeTexture(int pos);
         void removeLight(int pos);
         void removeMaterial(int pos);
-        void removeObject(int pos);
+        void removeModel(int pos);
 
         GLuint *getTexture(int pos);
         glm::vec3 *getLight(int pos);
         Material *getMaterial(int pos);
-        Object *getObject(int pos);
+        Model *getModel(int pos);
 
         GLFWwindow *getWindow() { return this->window; }
 };
-
-// STANDARD FUNCTIONS
-GLuint readTexture(const char* filename);
 
 #endif
