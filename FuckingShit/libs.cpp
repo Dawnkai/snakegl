@@ -45,9 +45,11 @@ void Mesh::initMesh(Object *object) {
 	glBindBuffer(GL_ARRAY_BUFFER, this->VBO);
 	glBufferData(GL_ARRAY_BUFFER, this->nrVertices * sizeof(Vertex), object->getVertices(), GL_STATIC_DRAW);
 
-	glGenBuffers(1, &this->EBO);
-	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, this->EBO);
-	glBufferData(GL_ELEMENT_ARRAY_BUFFER, this->nrIndices * sizeof(GLuint), object->getIndices(), GL_STATIC_DRAW);
+	if (this->nrIndices > 0) {
+		glGenBuffers(1, &this->EBO);
+		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, this->EBO);
+		glBufferData(GL_ELEMENT_ARRAY_BUFFER, this->nrIndices * sizeof(GLuint), object->getIndices(), GL_STATIC_DRAW);
+	}
 }
 
 // Update uniform values in shader program before rendering
@@ -119,7 +121,6 @@ Game::Game(const char *title, int width, int height) {
     this->title = title;
     this->width = width;
     this->height = height;
-    this->cameraPosition = glm::vec3(0.0f, 0.0f, 1.0f);
     this->init();
 }
 
@@ -198,12 +199,6 @@ void Game::createGame() {
 void Game::setupScene() {
 
 	// Set view and projection matrix
-	this->viewMatrix = glm::lookAt(
-		this->cameraPosition,
-		this->cameraPosition - glm::vec3(0.0f, 0.0f, 1.0f),
-		glm::vec3(0.0f, 1.0f, 0.0f)
-	);
-
 	this->projectionMatrix = glm::perspective(
 		glm::radians(FOV),
 		static_cast<float>(WIDTH) / HEIGHT,
@@ -211,7 +206,7 @@ void Game::setupScene() {
 		FAR_PLANE
 	);
 
-	glUniformMatrix4fv(this->sp->u("viewMatrix"), 1, GL_FALSE, glm::value_ptr(this->viewMatrix));
+	glUniformMatrix4fv(this->sp->u("viewMatrix"), 1, GL_FALSE, glm::value_ptr(this->camera.getViewMatrix()));
 	glUniformMatrix4fv(this->sp->u("projectionMatrix"), 1, GL_FALSE, glm::value_ptr(this->projectionMatrix));
 
 	// Enable object attributes
@@ -222,7 +217,7 @@ void Game::setupScene() {
 
 	// Enable lightning and camera
 	glUniform3fv(this->sp->u("lightPos0"), 1, glm::value_ptr(*(this->lights[0])));
-	glUniform3fv(this->sp->u("cameraPosition"), 1, glm::value_ptr(this->cameraPosition));
+	glUniform3fv(this->sp->u("cameraPosition"), 1, glm::value_ptr(this->camera.getPosition()));
 }
 
 // Pool all inputs
@@ -234,12 +229,10 @@ void Game::updateInput() {
 
 // Pool keybaord input
 void Game::updateKeyboard() {
-	if (glfwGetKey(this->window, GLFW_KEY_W) == GLFW_PRESS) this->cameraPosition.z -= CAMERA_SPEED;
-	if (glfwGetKey(this->window, GLFW_KEY_S) == GLFW_PRESS) this->cameraPosition.z += CAMERA_SPEED;
-	if (glfwGetKey(this->window, GLFW_KEY_A) == GLFW_PRESS) this->cameraPosition.x -= CAMERA_SPEED;
-	if (glfwGetKey(this->window, GLFW_KEY_D) == GLFW_PRESS) this->cameraPosition.x += CAMERA_SPEED;
-	if (glfwGetKey(this->window, GLFW_KEY_Z) == GLFW_PRESS) this->cameraPosition.y -= CAMERA_SPEED;
-	if (glfwGetKey(this->window, GLFW_KEY_C) == GLFW_PRESS) this->cameraPosition.y += CAMERA_SPEED;
+	if (glfwGetKey(this->window, GLFW_KEY_W) == GLFW_PRESS) this->camera.moveCamera(this->dt, UP);
+	if (glfwGetKey(this->window, GLFW_KEY_S) == GLFW_PRESS) this->camera.moveCamera(this->dt, DOWN);
+	if (glfwGetKey(this->window, GLFW_KEY_A) == GLFW_PRESS) this->camera.moveCamera(this->dt, LEFT);
+	if (glfwGetKey(this->window, GLFW_KEY_D) == GLFW_PRESS) this->camera.moveCamera(this->dt, RIGHT);
 	if (glfwGetKey(this->window, GLFW_KEY_ESCAPE) == GLFW_PRESS) glfwSetWindowShouldClose(this->window, GL_TRUE);
 }
 
@@ -258,6 +251,10 @@ void Game::updateMouse() {
 
 	this->lastMousePosX = this->mousePosX;
 	this->lastMousePosY = this->mousePosY;
+
+	if (glfwGetMouseButton(this->window, GLFW_MOUSE_BUTTON_1) == GLFW_PRESS) {
+		*this->lights.at(0) = this->camera.getPosition();
+	}
 }
 
 // Update delta time for smooth fps
@@ -382,16 +379,16 @@ void Camera::rotateCamera(const float &dt, const double &offsetX, const double &
 
 void Camera::moveCamera(const float &dt, const int direction) {
 	switch(direction) {
-		case 0:
+		case UP:
 			this->position += this->front * this->movementSpeed * dt;
 			break;
-		case 1:
+		case DOWN:
 			this->position -= this->front * this->movementSpeed * dt;
 			break;
-		case 2:
+		case LEFT:
 			this->position -= this->right * this->movementSpeed * dt;
 			break;
-		case 3:
+		case RIGHT:
 			this->position += this->right * this->movementSpeed * dt;
 			break;
 		default:
@@ -438,4 +435,96 @@ GLuint readTexture(const char* filename) {
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
 
 	return tex;
+}
+
+// Load .obj file
+std::vector<Vertex> loadOBJ(const char *filename) {
+    std::vector<glm::fvec3> vertexPosition;
+    std::vector<glm::fvec2> vertexTexCoord;
+    std::vector<glm::fvec3> vertexNormal;
+    
+    std::vector<GLint> indexPosition;
+    std::vector<GLint> indexTexCoord;
+    std::vector<GLint> indexNormal;
+
+    std::vector<Vertex> vertices;
+
+    glm::vec3 temp_vec3;
+    glm::vec2 temp_vec2;
+    GLint temp_int;
+
+    std::stringstream ss;
+    std::ifstream input(filename);
+    std::string line = "";
+    std::string prefix = "";
+
+    int count = 0;
+
+    if (!input.is_open()) {
+        std::cout << "ERROR::LOADER::File " << filename << " could not be opened." << std::endl;
+        return std::vector<Vertex>();
+    }
+
+    while (std::getline(input, line)) {
+        ss.clear();
+        ss.str(line);
+        ss >> prefix;
+
+        // Vertex position
+        if (prefix == "v") {
+            ss >> temp_vec3.x >> temp_vec3.y >> temp_vec3.z;
+            vertexPosition.push_back(temp_vec3);
+        }
+
+        // Vertex texture coordinates
+        else if (prefix == "vt") {
+            ss >> temp_vec2.x >> temp_vec2.y;
+            vertexTexCoord.push_back(temp_vec2);
+        }
+
+        // Vertex normals
+        else if (prefix == "vn") {
+            ss >> temp_vec3.x >> temp_vec3.y >> temp_vec3.z;
+            vertexNormal.push_back(temp_vec3);
+        }
+
+        // Vertex face mapping to indices
+        else if (prefix == "f") {
+            count = 0;
+            while (ss >> temp_int) {
+                // Load indices
+                if (count == 0) indexPosition.push_back(temp_int);
+                else if (count == 1) indexTexCoord.push_back(temp_int);
+                else if (count == 2) indexNormal.push_back(temp_int);
+
+                // Skip face separators
+                if (ss.peek() == '/') {
+                    count++;
+                    ss.ignore(1, '/');
+                }
+                else if (ss.peek() == ' ') {
+                    count++;
+                    ss.ignore(1, ' ');
+                }
+
+                // Reset counter after loading a face
+                if (count > 2) count = 0;
+            }
+        }
+    }
+
+	// Merge indices and vertices
+	vertices.resize(vertexPosition.size(), Vertex());
+
+	for (int i = 0; i < vertices.size(); i++) {
+		vertices.at(i).position = vertexPosition[indexPosition[i] - 1];
+		vertices.at(i).texcoord = vertexTexCoord[indexTexCoord[i] - 1];
+		vertices.at(i).normal = vertexNormal[indexNormal[i] - 1];
+		vertices.at(i).color = glm::vec3(1.0f, 1.0f, 1.0f);
+	}
+
+    std::cout << "Object " << filename << " loaded." << std::endl;
+    std::cout << "Number of vertices: " << vertices.size() << std::endl;
+
+    return vertices;
 }

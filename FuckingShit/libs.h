@@ -13,14 +13,16 @@
 #include <stdio.h>
 #include <iostream>
 #include <vector>
+#include <fstream>
+#include <sstream>
+#include <algorithm>
 #include "shaderprogram.h"
 #include "lodepng.h"
 
 extern int HEIGHT;
 extern int WIDTH;
 
-// STANDARD FUNCTIONS
-GLuint readTexture(const char* filename);
+enum direction { UP = 0, DOWN, LEFT, RIGHT };
 
 // STRUCTS
 struct Vertex {
@@ -29,6 +31,11 @@ struct Vertex {
     glm::vec2 texcoord;
     glm::vec3 normal;
 };
+
+
+// STANDARD FUNCTIONS
+GLuint readTexture(const char* filename);
+std::vector<Vertex> loadOBJ(const char *filename);
 
 
 // CLASSES
@@ -64,6 +71,9 @@ class Object {
 
     public:
         Object() {}
+        Object(const Vertex* vertices, const unsigned nrVertices, const GLuint* indices, const unsigned nrIndices) {
+            this->initalize(vertices, nrVertices, indices, nrIndices);
+        }
         virtual ~Object() {}
     
         void initalize(const Vertex* vertices, const unsigned nrVertices, const GLuint* indices, const unsigned nrIndices);
@@ -72,31 +82,6 @@ class Object {
         GLuint *getIndices() { return this->indices.data(); }
         const unsigned getSizeVertices() { return this->vertices.size(); }
         const unsigned getSizeIndices() { return this->indices.size(); }
-};
-
-
-class Floor : public Object {
-    public:
-        Floor() : Object() {
-            Vertex verts[] = {
-                // Position							// Color							// Texcoords				// Normals
-                glm::vec3(-0.5f, 0.5f, 0.0f),		glm::vec3(1.0f, 0.0f, 0.0f),		glm::vec2(0.0f, 1.0f),		glm::vec3(0.0f, 0.0f, 1.0f),
-                glm::vec3(-0.5f, -0.5f, 0.0f),		glm::vec3(0.0f, 1.0f, 0.0f),		glm::vec2(0.0f, 0.0f),		glm::vec3(0.0f, 0.0f, 1.0f),
-                glm::vec3(0.5f, -0.5f, 0.0f),		glm::vec3(0.0f, 0.0f, 1.0f),		glm::vec2(1.0f, 0.0f),		glm::vec3(0.0f, 0.0f, 1.0f),
-                glm::vec3(0.5f, 0.5f, 0.0f),		glm::vec3(0.0f, 1.0f, 0.0f),		glm::vec2(1.0f, 1.0f),		glm::vec3(0.0f, 0.0f, 1.0f)
-            };
-
-            unsigned int nrOfVerts = sizeof(verts) / sizeof(Vertex);
-
-            GLuint indices[] = {
-                0, 1, 2,
-                0, 2, 3
-            };
-
-            unsigned int nrOfIndic = sizeof(indices) / sizeof(GLuint);
-
-            this->initalize(verts, nrOfVerts, indices, nrOfIndic);
-        }
 };
 
 
@@ -130,7 +115,7 @@ class Mesh {
         ~Mesh() {
             glDeleteVertexArrays(1, &this->VAO);
             glDeleteBuffers(1, &this->VBO);
-            glDeleteBuffers(1, &this->EBO);
+            if (nrIndices > 0) glDeleteBuffers(1, &this->EBO);
         }
 
         void update();
@@ -152,11 +137,27 @@ class Model {
 
     public:
         Model(const char *texturePath, Object *object, glm::mat4 modelMatrix = glm::mat4(1.0f)) {
+            this->object = object;
+            this->init(texturePath, object, modelMatrix);
+        }
+
+        Model(const char *texturePath, const Vertex* vertices, const unsigned nrVertices,
+              const GLuint* indices, const unsigned nrIndices, glm::mat4 modelMatrix = glm::mat4(1.0f)) {
+            this->object = new Object(vertices, nrVertices, indices, nrIndices);
+            this->init(texturePath, object, modelMatrix);
+        }
+
+        Model(const char *texturePath, const char *filepath, glm::mat4 modelMatrix = glm::mat4(1.0f)) {
+            std::vector<Vertex> data = loadOBJ(filepath);
+            this->object = new Object(data.data(), data.size(), NULL, 0);
+            this->init(texturePath, object, modelMatrix);
+        }
+
+        void init(const char *texturePath, Object *object, glm::mat4 modelMatrix) {
             this->modelMatrix = modelMatrix;
             this->texture = readTexture(texturePath);
             this->material = Material();
             this->material.setDiffuseTex(this->texture);
-            this->object = object;
             this->mesh = new Mesh(this->object);
         }
 
@@ -165,7 +166,10 @@ class Model {
         Material getMaterial() { return this->material; }
         Object *getObject() { return this->object; }
 
-        ~Model() {}
+        ~Model() {
+            delete this->object;
+            delete this->mesh;
+        }
 };
 
 
@@ -186,7 +190,6 @@ class Camera {
         GLfloat sensitivity = SENSITIVITY;
 
         void rotateCamera(const float &dt, const double &offsetX, const double &offsetY);
-        void moveCamera(const float &dt, const int direction);
         void initCamera();
 
     public:
@@ -197,15 +200,17 @@ class Camera {
         ~Camera() {}
 
         const glm::mat4 getViewMatrix() {
-            this->viewMatrix = glm::lookAt(this->position, this->position + this->front, this->worldUp);
+            this->viewMatrix = glm::lookAt(this->position, this->position + this->front, this->up);
             return this->viewMatrix;
         }
 
         const glm::vec3 getPosition() const { return this->position; }
 
+        void moveCamera(const float &dt, const int direction);
+
         void updateCamera(const float &dt, const int direction, const double &offsetX, const double &offsetY) {
             this->rotateCamera(dt, offsetX, offsetY);
-            this->moveCamera(dt, direction);
+            this->initCamera();
         }
 };
 
@@ -217,7 +222,6 @@ class Game {
         Camera camera;
         glm::mat4 viewMatrix;
         glm::mat4 projectionMatrix;
-        glm::vec3 cameraPosition;
 
         std::vector<GLuint*> textures;
         std::vector<glm::vec3*> lights;
