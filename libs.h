@@ -132,7 +132,7 @@ class Camera {
         ~Camera() {}
 
         const glm::mat4 getViewMatrix();
-        const glm::vec3 getPosition() { return this->position; }
+        const glm::vec4 getPosition() { return glm::vec4(this->position, 0.0f); }
         void rotateCamera(const float &dt, const double &offsetX, const double &offsetY);
         void moveCamera(const float &dt, const int direction);
 };

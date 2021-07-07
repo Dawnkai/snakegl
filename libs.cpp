@@ -234,6 +234,9 @@ void App::drawScene() {
     glUniformMatrix4fv(this->sp->u("P"),1,false,glm::value_ptr(this->P));
     glUniformMatrix4fv(this->sp->u("V"),1,false,glm::value_ptr(this->V));
 
+    // Change light based on camera position
+    glUniform4fv(this->sp->u("lightDir"),1,glm::value_ptr(this->camera.getPosition()));
+
 	// Enable attributes
     this->setAttribArrays();
 
