@@ -13,7 +13,6 @@ int main(void)
 
 	Model *floor = new Model(myFloorVertices, myFloorTexCoords, myFloorNormals, myFloorColors, myFloorVertexCount);
 	floor->setTexture("wood.png");
-	floor->rotate(glm::vec3(60.0f, 0.0f, 0.0f));
 	app->addModel(floor);
 
 	//Main loop

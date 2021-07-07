@@ -2,6 +2,12 @@
 #define LIBS_H_
 
 #define PI 3.14f
+#define NEAR_PLANE 1.0f
+#define FAR_PLANE 50.0f
+#define FOV 50.0f
+#define ASPECT_RATIO 1.0f
+#define MOVEMENT_SPEED 0.50f
+#define SENSITIVITY 5.0f
 
 #include <GL/glew.h>
 #include <GLFW/glfw3.h>
@@ -104,31 +110,83 @@ class Model {
 };
 
 
+class Camera {
+    private:
+        glm::mat4 viewMatrix = glm::mat4(1.0f);
+
+        glm::vec3 worldUp = glm::vec3(0.0f, 1.0f, 0.0f);
+        glm::vec3 position = glm::vec3(0.0f, 0.0f, 1.0f);
+        glm::vec3 front;
+        glm::vec3 right = glm::vec3(0.0f);
+        glm::vec3 up = glm::vec3(0.0f, 1.0f, 0.0f);
+        glm::vec3 direction = glm::vec3(0.0f, 0.0f, 1.0f);
+
+        GLfloat pitch = 0.0f;
+        GLfloat yaw = -90.0f;
+        GLfloat roll = 0.0f;
+
+        void updateCamera();
+
+    public:
+        Camera() { this->updateCamera(); };
+        ~Camera() {}
+
+        const glm::mat4 getViewMatrix();
+        const glm::vec3 getPosition() { return this->position; }
+        void rotateCamera(const float &dt, const double &offsetX, const double &offsetY);
+        void moveCamera(const float &dt, const int direction);
+};
+
+
 class App {
     private:
+
+        // App window attributes
         GLFWwindow *window;
         const char *title;
+
+        // All models
         std::vector<Model*> models;
+
+        // Camera
+        Camera camera;
+
+        // Shader program
         ShaderProgram *sp;
 
-        // View Matrix
-        glm::mat4 V = glm::lookAt(
-            glm::vec3(0.0f,0.0f,-4.0f),
-            glm::vec3(0.0f,0.0f,0.0f),
-            glm::vec3(0.0f,1.0f,0.0f)
-        );
+        // View Matrix attributes
+        glm::vec3 cameraPosition = glm::vec3(0.0f, 0.0f, -4.0f);
+        glm::vec3 cameraFront = glm::vec3(0.0f, 0.0f, 4.0f);
+        glm::vec3 worldUp = glm::vec3(0.0f, 1.0f, 0.0f);
+        glm::mat4 V;
 
         // Perspective matrix
-        glm::mat4 P = glm::perspective(50.0f*PI/180.0f,
-            1.0f, 1.0f, 50.0f
+        glm::mat4 P = glm::perspective(glm::radians(FOV),
+            ASPECT_RATIO, NEAR_PLANE, FAR_PLANE
         );
 
+        // Delta time (for smoother movement)
+        float dt = 0.0f;
+        float curTime = 0.0f;
+        float lastTime = 0.0f;
+
+        // Mouse input attributes
+        double lastMouseX = 0.0f;
+        double lastMouseY = 0.0f;
+        double mouseX = 0.0f;
+        double mouseY = 0.0f;
+        double mouseOffsetX = 0.0f;
+        double mouseOffsetY = 0.0f;
+        bool firstMouse = true;
+
+        // Methods
         static void keyCallback(GLFWwindow* window,int key,int scancode,int action,int mods);
         static void windowResizeCallback(GLFWwindow* window,int width,int height);
         void renderObjects();
         void init();
         void setAttribArrays();
         void disableAttribArrays();
+        void updateDt();
         void move(int direction);
     
     public:
@@ -148,6 +206,7 @@ class App {
 
         void drawScene();
         void updateInput();
+        void updateMouse();
 };
 
 #endif

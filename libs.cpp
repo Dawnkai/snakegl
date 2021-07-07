@@ -227,6 +227,9 @@ void App::drawScene() {
 	// Activate shading program
     this->sp->use();
 
+    // Calculate View Matrix based on camera position
+    this->V = this->camera.getViewMatrix();
+
     // Send camera to GPU
     glUniformMatrix4fv(this->sp->u("P"),1,false,glm::value_ptr(this->P));
     glUniformMatrix4fv(this->sp->u("V"),1,false,glm::value_ptr(this->V));
@@ -251,6 +254,8 @@ void App::init() {
 	glEnable(GL_DEPTH_TEST);
 	glfwSetWindowSizeCallback(this->window, this->windowResizeCallback);
 	glfwSetKeyCallback(this->window, this->keyCallback);
+    // Disable mouse
+    glfwSetInputMode(this->window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
 	this->sp=new ShaderProgram("vertex_shader.glsl",NULL,"fragment_shader.glsl");
 }
 
@@ -295,12 +300,53 @@ void App::disableAttribArrays() {
 
 // Get recent input and act accordingly
 void App::updateInput() {
+    // Poll input
     glfwPollEvents();
+
+    // Move objects
     if (glfwGetKey(this->window, GLFW_KEY_W) == GLFW_PRESS) move(UP);
     else if (glfwGetKey(this->window, GLFW_KEY_S) == GLFW_PRESS) move(DOWN);
     else if (glfwGetKey(this->window, GLFW_KEY_A) == GLFW_PRESS) move(LEFT);
     else if (glfwGetKey(this->window, GLFW_KEY_D) == GLFW_PRESS) move(RIGHT);
     else if (glfwGetKey(this->window, GLFW_KEY_ESCAPE) == GLFW_PRESS) glfwSetWindowShouldClose(this->window, GL_TRUE);
+
+    // Move camera
+    else if (glfwGetKey(this->window, GLFW_KEY_UP) == GLFW_PRESS) this->camera.moveCamera(this->dt, UP);
+    else if (glfwGetKey(this->window, GLFW_KEY_DOWN) == GLFW_PRESS) this->camera.moveCamera(this->dt, DOWN);
+    else if (glfwGetKey(this->window, GLFW_KEY_LEFT) == GLFW_PRESS) this->camera.moveCamera(this->dt, LEFT);
+    else if (glfwGetKey(this->window, GLFW_KEY_RIGHT) == GLFW_PRESS) this->camera.moveCamera(this->dt, RIGHT);
+
+    // Rotate camera
+    this->updateMouse();
+    this->camera.rotateCamera(this->dt, this->mouseOffsetX, this->mouseOffsetY);
+
+    // Update delta time
+    this->updateDt();
+}
+
+
+void App::updateMouse() {
+    glfwGetCursorPos(this->window, &this->mouseX, &this->mouseY);
+
+    if (this->firstMouse) {
+        this->lastMouseX = this->mouseX;
+        this->lastMouseY = this->mouseY;
+        this->firstMouse = false;
+    }
+
+    this->mouseOffsetX = this->mouseX - this->lastMouseX;
+    this->mouseOffsetY = this->lastMouseY - this->mouseY;
+
+    this->lastMouseX = this->mouseX;
+    this->lastMouseY = this->mouseY;
+}
+
+
+// Update delta time for smoother mouse movement
+void App::updateDt() {
+    this->curTime = static_cast<float>(glfwGetTime());
+    this->dt = this->curTime - this->lastTime;
+    this->lastTime = this->curTime;
 }
 
 
@@ -311,3 +357,62 @@ void App::move(int direction) {
 
 
 //-----------------------------------------------------------------------------------------------------------------------------------
+// CAMERA CLASS
+
+
+// Get view matrix
+const glm::mat4 Camera::getViewMatrix() {
+    this->updateCamera();
+    this->viewMatrix = glm::lookAt(this->position, this->position + this->front, this->up);
+    return this->viewMatrix;
+}
+
+
+// Update camera attributes
+void Camera::updateCamera() {
+    this->front.x = cos(glm::radians(this->yaw)) * cos(glm::radians(this->pitch));
+    this->front.y = sin(glm::radians(this->pitch));
+    this->front.z = sin(glm::radians(this->yaw)) * cos(glm::radians(this->pitch));
+
+    this->front = glm::normalize(this->front);
+    this->right = glm::normalize(glm::cross(this->front, this->worldUp));
+    this->up = glm::normalize(glm::cross(this->right, this->front));
+}
+
+
+// Change camera rotation based on mouse position
+void Camera::rotateCamera(const float &dt, const double &offsetX, const double &offsetY) {
+    this->pitch += static_cast<GLfloat>(offsetY) * SENSITIVITY * dt;
+    this->yaw += static_cast<GLfloat>(offsetX) * SENSITIVITY * dt;
+
+    // Prevent gimbal lock
+    if (this->pitch > 80.0f) this->pitch = 80.0f;
+    else if (this->pitch < -80.0f) this->pitch = -80.0f;
+
+    if (this->yaw > 360.0f || this->yaw < -360.0f) this->yaw = 0.0f;
+}
+
+
+// Change camera position based on keyboard input
+void Camera::moveCamera(const float &dt, const int direction) {
+    switch (direction) {
+        case UP:
+            this->position += this->front * MOVEMENT_SPEED * dt;
+            break;
+        
+        case DOWN:
+            this->position -= this->front * MOVEMENT_SPEED * dt;
+            break;
+        
+        case LEFT:
+            this->position -= this->right * MOVEMENT_SPEED * dt;
+            break;
+        
+        case RIGHT:
+            this->position += this->right * MOVEMENT_SPEED * dt;
+            break;
+        
+        default:
+            break;
+    }
+}
