@@ -1,26 +1,30 @@
+#define GLM_FORCE_RADIANS
+
 #include "libs.h"
+#include "myCube.h"
+#include "floor.h"
 
 int main(void)
 {
-	Game game("Snake 3D", 500, 500);
+	App *app = new App(500, 500, "Snake");
 
-	GLuint floorTex = readTexture("wood.png");
-	Material floorMat;
-	Floor floor;
+	Model *apple = new Model("apple.obj", "apple.png");
+	apple->scale(glm::vec3(4.0f, 4.0f, 4.0f));
+	app->addModel(apple);
 
-	game.addTexture(&floorTex);
-	floorMat.setDiffuseTex(*game.getTexture(0));
-	game.addMaterial(&floorMat);
+	Model *floor = new Model(myFloorVertices, myFloorTexCoords, myFloorNormals, myFloorColors, myFloorVertexCount);
+	floor->setTexture("wood.png");
+	floor->rotate(glm::vec3(60.0f, 0.0f, 0.0f));
+	app->addModel(floor);
 
-	// Game loop
-	while (!glfwWindowShouldClose(game.getWindow()))
+	//Main loop
+	while (!glfwWindowShouldClose(app->getWindow()))
 	{
-		game.drawScene();
-		glfwPollEvents();
+		app->drawScene();
+		app->updateInput();
 	}
 
-	// End game
-	game.~Game();
-	glfwTerminate();
-	exit(EXIT_SUCCESS);
+	delete apple;
+	delete app;
 }
+

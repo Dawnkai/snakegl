@@ -1,23 +1,24 @@
 #version 330
 
-uniform mat4 modelMatrix;
-uniform mat4 viewMatrix;
-uniform mat4 projectionMatrix;
+uniform mat4 P;
+uniform mat4 V;
+uniform mat4 M;
 
-in vec3 position;
-in vec3 color;
-in vec2 texcoord;
-in vec3 normal;
+uniform vec4 lightDir=vec4(0,0,1,0);
 
-out vec3 iPosition;
-out vec3 iColor;
-out vec2 iTexcoord;
-out vec3 iNormal;
+layout (location=0) in vec4 position;
+layout (location=1) in vec4 normal;
+layout (location=2) in vec2 texcoord;
 
-void main() {
-    iPosition = vec4(modelMatrix * vec4(position, 1.f)).xyz;
-    iColor = color;
-    iTexcoord = vec2(texcoord.x, texcoord.y * -1.f);
-    iNormal = mat3(modelMatrix) * normal;
-    gl_Position = projectionMatrix * viewMatrix * modelMatrix * vec4(position, 1.f);
+out vec2 iTC;
+out float iNL;
+
+void main(void) {
+    gl_Position = P*V*M*position;
+
+    mat4 G=mat4(inverse(transpose(mat3(M))));
+    vec4 n=normalize(V*G*normal);
+
+    iNL=clamp(dot(n,lightDir),0,1);
+    iTC=texcoord;
 }

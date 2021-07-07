@@ -1,6 +1,8 @@
 #ifndef LIBS_H_
 #define LIBS_H_
 
+#define PI 3.14f
+
 #include <GL/glew.h>
 #include <GLFW/glfw3.h>
 #include <glm/glm.hpp>
@@ -10,208 +12,142 @@
 #include <stdio.h>
 #include <iostream>
 #include <vector>
-#include "shaderprogram.h"
+#include <fstream>
+#include <sstream>
+#include <algorithm>
 #include "lodepng.h"
+#include "shaderprogram.h"
+#include "objloader.h"
 
-extern int HEIGHT;
-extern int WIDTH;
+enum DIRECTION { UP = 0, DOWN, LEFT, RIGHT };
 
-// STRUCTS
-struct Vertex {
-    glm::vec3 position;
-    glm::vec3 color;
-    glm::vec2 texcoord;
-    glm::vec3 normal;
-};
+GLuint readTexture(const char* filename);
 
-
-// CLASSES
-class Material {
+class Model {
     private:
-        glm::vec3 ambientLight;
-        glm::vec3 diffuseLight;
-        glm::vec3 specularLight;
-        GLint diffuseTex;
-        GLint specularTex;
-    
+        OBJModel model;
+        float *vertexPosition = NULL;
+        float *vertexTexCoord = NULL;
+        float *vertexNormal = NULL;
+        float *vertexColor = NULL;
+        GLuint *indices = NULL;
+        unsigned int indexCount = 0;
+        unsigned int vertexCount = 0;
+
+        glm::mat4 modelMatrix = glm::mat4(1.0f);
+        GLuint texture;
+
+        void initalize(const char *filepath);
+
     public:
-        Material(glm::vec3 ambient = glm::vec3(0.1f), glm::vec3 diffuse = glm::vec3(1.0f),
-                 glm::vec3 specular = glm::vec3(1.0f), GLint diffuseTex = -1,
-                 GLint specularTex = -1) {
-            this->ambientLight = ambient;
-            this->diffuseLight = diffuse;
-            this->specularLight = specular;
-            if (diffuseTex != -1) this->diffuseTex = diffuseTex;
-            if (specularTex != -1) this->specularTex = specularTex;
+        Model(const char *filepath) {
+            this->initalize(filepath);
         }
 
-        void setDiffuseTex(GLint diffuseTex);
-        void setSpecularTex(GLint specularTex);
+        Model(const char *filepath, const char *texturePath) {
+            this->initalize(filepath);
+            this->setTexture(texturePath);
+        }
+
+        Model(float *vertexPosition, float *vertexTexCoord, float *vertexNormal, float *colors, unsigned int vertexCount) {
+            this->vertexPosition = vertexPosition;
+            this->vertexTexCoord = vertexTexCoord;
+            this->vertexNormal = vertexNormal;
+            this->vertexColor = colors;
+            this->vertexCount = vertexCount;
+        }
+
+        Model(float *vertexPosition, float *vertexTexCoord, float *vertexNormal, float *colors, GLuint *indices,
+              unsigned int vertexCount, unsigned int indexCount) {
+            this->vertexPosition = vertexPosition;
+            this->vertexTexCoord = vertexTexCoord;
+            this->vertexNormal = vertexNormal;
+            this->vertexColor = colors;
+            this->vertexCount = vertexCount;
+            this->indices = indices;
+            this->indexCount = indexCount;
+        }
+
+        void setPosition(std::vector<glm::vec4> *position, std::vector<GLint> *indexPosition);
+        void setTexCoord(std::vector<glm::vec2> *texCoord, std::vector<GLint> *indexTexCoord);
+        void setNormal(std::vector<glm::vec4> *normal, std::vector<GLint> *indexNormal);
+        void setColor(int size);
+        void setModelMatrix(glm::mat4 modelMatrix) { this->modelMatrix = modelMatrix; }
+        void setTexture(GLuint texture) { this->texture = texture; }
+        void setTexture(const char *filepath);
+
+        void scale(glm::vec3 scale);
+        void rotate(glm::vec3 rotation);
+        void translate(glm::vec3 translation);
+
+        float *getPosition() { return (this->vertexPosition ? this->vertexPosition : this->model.vertices); }
+        float *getTexCoord() { return (this->vertexTexCoord ? this->vertexTexCoord : this->model.texCoords); }
+        float *getNormal() { return (this->vertexNormal ? this->vertexNormal : this->model.normals); }
+        float *getColor() { return (this->vertexColor ? this->vertexColor : this->model.colors); }
+        GLuint *getIndices() { return this->indices; }
+
+        glm::mat4 getModelMatrix() { return this->modelMatrix; }
+        GLuint getTexture() { return this->texture; }
+
+        unsigned int getVertexCount() { return (this->vertexCount != 0 ? this->vertexCount : this->model.getVertexCount()); }
+        unsigned int getIndexCount() { return this->indexCount; }
+
+        void activateTexture(ShaderProgram *sp);
         void sendToShader(ShaderProgram *sp);
-};
 
-
-class Object {
-    private:
-        std::vector<Vertex> vertices;
-        std::vector<GLuint> indices;
-
-    public:
-        Object() {}
-        virtual ~Object() {}
-    
-        void initalize(const Vertex* vertices, const unsigned nrVertices, const GLuint* indices, const unsigned nrIndices);
-
-        Vertex *getVertices() { return this->vertices.data(); }
-        GLuint *getIndices() { return this->indices.data(); }
-        const unsigned getSizeVertices() { return this->vertices.size(); }
-        const unsigned getSizeIndices() { return this->indices.size(); }
-};
-
-
-class Floor : public Object {
-    public:
-        Floor() : Object() {
-            Vertex verts[] = {
-                // Position							// Color							// Texcoords				// Normals
-                glm::vec3(-0.5f, 0.5f, 0.0f),		glm::vec3(1.0f, 0.0f, 0.0f),		glm::vec2(0.0f, 1.0f),		glm::vec3(0.0f, 0.0f, 1.0f),
-                glm::vec3(-0.5f, -0.5f, 0.0f),		glm::vec3(0.0f, 1.0f, 0.0f),		glm::vec2(0.0f, 0.0f),		glm::vec3(0.0f, 0.0f, 1.0f),
-                glm::vec3(0.5f, -0.5f, 0.0f),		glm::vec3(0.0f, 0.0f, 1.0f),		glm::vec2(1.0f, 0.0f),		glm::vec3(0.0f, 0.0f, 1.0f),
-                glm::vec3(0.5f, 0.5f, 0.0f),		glm::vec3(0.0f, 1.0f, 0.0f),		glm::vec2(1.0f, 1.0f),		glm::vec3(0.0f, 0.0f, 1.0f)
-            };
-
-            unsigned int nrOfVerts = sizeof(verts) / sizeof(Vertex);
-
-            GLuint indices[] = {
-                0, 1, 2,
-                0, 2, 3
-            };
-
-            unsigned int nrOfIndic = sizeof(indices) / sizeof(GLuint);
-
-            this->initalize(verts, nrOfVerts, indices, nrOfIndic);
+        ~Model() {
+            if (this->vertexPosition) delete this->vertexPosition;
+            if (this->vertexNormal) delete this->vertexNormal;
+            if (this->vertexColor) delete this->vertexColor;
+            if (this->vertexTexCoord) delete this->vertexTexCoord;
         }
 };
 
 
-class Mesh {
-    private:
-        unsigned nrVertices = 0;
-        unsigned nrIndices = 0;
-
-        glm::vec3 position = glm::vec3(0.0f);
-        glm::vec3 rotation = glm::vec3(0.0f);
-        glm::vec3 scale = glm::vec3(1.0f);
-        glm::mat4 ModelMatrix;
-
-        GLuint VAO;
-        GLuint VBO;
-        GLuint EBO;
-
-        void initMesh(Vertex *vertexData, const unsigned &nrVertices, GLuint *indexData, const unsigned &nrIndices, ShaderProgram *sp);
-        void initMesh(Object *object, ShaderProgram *sp);
-        void updateUniforms(ShaderProgram *sp);
-
-    public:
-        Mesh(Vertex *vertexData, const unsigned &nrVertices,
-             GLuint *indexData, const unsigned &nrIndices,
-             ShaderProgram *sp) {
-            this->initMesh(vertexData, nrVertices, indexData, nrIndices, sp);
-            this->update();
-        }
-
-        Mesh(Vertex *vertexData, const unsigned &nrVertices,
-             GLuint *indexData, const unsigned &nrIndices,
-             ShaderProgram *sp, glm::vec3 position, glm::vec3 rotation, glm::vec3 scale) {
-            this->position = position;
-            this->rotation = rotation;
-            this->scale = scale;
-            this->initMesh(vertexData, nrVertices, indexData, nrIndices, sp);
-            this->update();
-        }
-
-        Mesh(Object *object, ShaderProgram *sp) {
-            this->initMesh(object, sp);
-            this->update();
-        }
-
-        Mesh(Object *object, ShaderProgram *sp, glm::vec3 position, glm::vec3 rotation, glm::vec3 scale) {
-            this->position = position;
-            this->rotation = rotation;
-            this->scale = scale;
-            this->initMesh(object, sp);
-            this->update();
-        }
-
-        ~Mesh() {
-            glDeleteVertexArrays(1, &this->VAO);
-            glDeleteBuffers(1, &this->VBO);
-            glDeleteBuffers(1, &this->EBO);
-        }
-
-        void update();
-        void render(ShaderProgram *sp);
-        void setPosition(const glm::vec3 position);
-        void setRotation(const glm::vec3 rotation);
-        void setScale(const glm::vec3 scale);
-};
-
-
-class Game {
+class App {
     private:
         GLFWwindow *window;
+        const char *title;
+        std::vector<Model*> models;
         ShaderProgram *sp;
-        glm::mat4 viewMatrix;
-        glm::mat4 projectionMatrix;
-        GLuint textureData[5];
-        glm::vec3 lightningData[5];
-        Material material0;
-        glm::vec3 cameraPosition;
 
-        std::vector<GLuint*> textures;
-        std::vector<glm::vec3*> lights;
-        std::vector<Material*> materials;
-        std::vector<Mesh*> meshes;
-        std::vector<Object*> objects;
+        // View Matrix
+        glm::mat4 V = glm::lookAt(
+            glm::vec3(0.0f,0.0f,-4.0f),
+            glm::vec3(0.0f,0.0f,0.0f),
+            glm::vec3(0.0f,1.0f,0.0f)
+        );
 
-        int width;
-        int height;
-        const char* title;
+        // Perspective matrix
+        glm::mat4 P = glm::perspective(50.0f*PI/180.0f,
+            1.0f, 1.0f, 50.0f
+        );
 
-        void init();
-        void createGame();
-        void resetWindow();
-        void setupScene();
-        void cleanScene();
-        static void error_callback(int error, const char* description);
         static void keyCallback(GLFWwindow* window,int key,int scancode,int action,int mods);
         static void windowResizeCallback(GLFWwindow* window,int width,int height);
-
+        void renderObjects();
+        void init();
+        void setAttribArrays();
+        void disableAttribArrays();
+        void move(int direction);
+    
     public:
-        Game(const char *title, int width, int height);
-        virtual ~Game();
-        void drawScene();
-        void update();
-
-        void addTexture(GLuint *texture);
-        void addLight(glm::vec3 *light);
-        void addMaterial(Material *material);
-        void addObject(Object *object);
-
-        void removeTexture(int pos);
-        void removeLight(int pos);
-        void removeMaterial(int pos);
-        void removeObject(int pos);
-
-        GLuint *getTexture(int pos);
-        glm::vec3 *getLight(int pos);
-        Material *getMaterial(int pos);
-        Object *getObject(int pos);
+        App(int width, int height, const char *title);
+        ~App();
 
         GLFWwindow *getWindow() { return this->window; }
-};
 
-// STANDARD FUNCTIONS
-GLuint readTexture(const char* filename);
+        Model *getModel(int pos) { return this->models.at(pos); }
+        void addModel(Model *model) { this->models.push_back(model); }
+        void removeModel(int pos);
+
+        void setCamera(glm::mat4 viewMatrix, glm::mat4 projectionMatrix) {
+            this->V = viewMatrix;
+            this->P = projectionMatrix;
+        }
+
+        void drawScene();
+        void updateInput();
+};
 
 #endif
