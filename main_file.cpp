@@ -1,7 +1,6 @@
 #define GLM_FORCE_RADIANS
 
 #include "libs.h"
-#include "myCube.h"
 #include "floor.h"
 
 int main(void)
