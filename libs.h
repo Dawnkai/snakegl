@@ -4,10 +4,10 @@
 #define PI 3.14f
 #define NEAR_PLANE 1.0f
 #define FAR_PLANE 50.0f
-#define FOV 50.0f
+#define FOV 90.0f
 #define ASPECT_RATIO 1.0f
 #define MOVEMENT_SPEED 0.50f
-#define SENSITIVITY 5.0f
+#define SENSITIVITY 10.0f
 
 #include <GL/glew.h>
 #include <GLFW/glfw3.h>
@@ -18,9 +18,12 @@
 #include <stdio.h>
 #include <iostream>
 #include <vector>
+#include <deque>
 #include <fstream>
 #include <sstream>
 #include <algorithm>
+#include <chrono>
+#include <thread>
 #include "lodepng.h"
 #include "shaderprogram.h"
 #include "objloader.h"
@@ -98,6 +101,7 @@ class Model {
         unsigned int getVertexCount() { return (this->vertexCount != 0 ? this->vertexCount : this->model.getVertexCount()); }
         unsigned int getIndexCount() { return this->indexCount; }
 
+
         void activateTexture(ShaderProgram *sp);
         void sendToShader(ShaderProgram *sp);
 
@@ -108,7 +112,6 @@ class Model {
             if (this->vertexTexCoord) delete this->vertexTexCoord;
         }
 };
-
 
 class Camera {
     private:
@@ -140,7 +143,6 @@ class Camera {
 
 class App {
     private:
-
         // App window attributes
         GLFWwindow *window;
         const char *title;
@@ -165,6 +167,9 @@ class App {
             ASPECT_RATIO, NEAR_PLANE, FAR_PLANE
         );
 
+        int arbitralAnimationValue = 0;
+        bool scaled = false;
+
         // Delta time (for smoother movement)
         float dt = 0.0f;
         float curTime = 0.0f;
@@ -179,16 +184,22 @@ class App {
         double mouseOffsetY = 0.0f;
         bool firstMouse = true;
 
-        // Methods
+        float velocity = 0.2f;
+        float angle = 22.0f;
+
+
+        void updateDt();
         static void keyCallback(GLFWwindow* window,int key,int scancode,int action,int mods);
         static void windowResizeCallback(GLFWwindow* window,int width,int height);
         void renderObjects();
         void init();
         void setAttribArrays();
         void disableAttribArrays();
-        void updateDt();
-        void move(int direction);
-    
+        void move(int direction, int pos);
+        void eat(int direction, int pos);
+        bool checkCollision();
+
+
     public:
         App(int width, int height, const char *title);
         ~App();
@@ -199,6 +210,9 @@ class App {
         void addModel(Model *model) { this->models.push_back(model); }
         void removeModel(int pos);
 
+        int getArbitralValue() { return this->arbitralAnimationValue; }
+        int getAmountOfModels() { return this->models.size(); }
+ 
         void setCamera(glm::mat4 viewMatrix, glm::mat4 projectionMatrix) {
             this->V = viewMatrix;
             this->P = projectionMatrix;
@@ -207,6 +221,9 @@ class App {
         void drawScene();
         void updateInput();
         void updateMouse();
+        void randomizeApple();
 };
+
+
 
 #endif
