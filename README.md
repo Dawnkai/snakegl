@@ -7,7 +7,7 @@
 * apple.png - apple texture
 * cylinder.obj - snake body fragment model
 * floor.h - floor vertices, normals and texture coordinates
-* fragment_shader.glsl - fragment shader definition
+* standard_fs.glsl - fragment shader implementing Lambertian shading
 * lodepng.cpp, lodepng.h - library for loading images into GPU
 * main_file.cpp - main application
 * Makefile - makefile for easy compilation
@@ -15,8 +15,13 @@
 * shderprogram.cpp, shaderprogram.h - shader program definition
 * snake_head.obj - snake's head model
 * snake.png - snake skin texture
-* vertex_shader.glsl - vertex shader definition
+* standard_vs.glsl - vertex shader implementing Lambertian shading
 * wood.png - floor texture
+* inverted_vs.glsl - vertex shader implementing Lambertian shading with inverted texture coordinates
+* phong_fs.glsl - fragment shader implementing Phong shading
+* phong_vs.glsl - vertex shader implementing Phong shading
+* libs.h - libraries required in order to run the project
+* libs.cpp - definitions for all classes and methods used in project
 
 #### 2. Compilation
 * **Using Makefile**:
@@ -28,6 +33,10 @@ $ ./main_file
 ```
 $ g++ *.cpp *.h -lGL -lglfw -lGLEW -I .
 $ ./a.out
+```
+* **Without compilation** (works only on Linux):
+```
+$ ./main_file
 ```
 
 #### 3. Contributing

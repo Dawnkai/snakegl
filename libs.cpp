@@ -206,33 +206,91 @@ App::~App() {
 }
 
 
-// Draw all objects in models attribute vector
-void App::renderObjects() {
+// Draw objects using Lambertian shading
+void App::renderLambertObjects() {
+    this->lambert->use();
+
+    this->updateUniforms(this->lambert);
+
+    // Enable attributes for Lambert shading
+    this->setAttribArrays(this->lambert);
+
     if(arbitralAnimationValue == this->models.size() && !scaled) {
         this->addModel(new Model(*this->getModel(this->models.size() - 1)));
         arbitralAnimationValue = 0;
         move(UP, this->models.size() - 1);
     }
+
     if(scaled) {
         this->models.at(arbitralAnimationValue)->scale(glm::vec3(0.8f, 0.8f, 0.8f));
         scaled = false;
         arbitralAnimationValue++;
     }
+
     if(!scaled && arbitralAnimationValue <= this->models.size() - 1 && arbitralAnimationValue >= 2) {
         this->models.at(arbitralAnimationValue)->scale(glm::vec3(1.25f, 1.25f, 1.25f));
         this->scaled = true;
     }
-    for (int i = 0; i < this->models.size(); i++) {
-        // Send object to shader program
-        this->models.at(i)->sendToShader(this->sp);
 
-        // Apply textures
-        this->models.at(i)->activateTexture(this->sp);
+    // Draw models
+    for (int i = 1; i < this->models.size(); i++) {
+        this->models.at(i)->sendToShader(this->lambert);
+        this->models.at(i)->activateTexture(this->lambert);
 
-        // Draw object
         if (this->models.at(i)->getIndexCount() == 0) glDrawArrays(GL_TRIANGLES, 0, this->models.at(i)->getVertexCount());
         else glDrawElements(GL_TRIANGLES, this->models.at(i)->getIndexCount(), GL_UNSIGNED_INT, 0);
     }
+
+    // Remove attributes from GPU
+    this->disableAttribArrays(this->lambert);
+}
+
+
+// Render objects using inverted Lambert shading
+void App::renderInvertedLambertObjects() {
+    this->invLambert->use();
+
+    this->updateUniforms(this->invLambert);
+
+    // Enable attributes for inverted Lambert shading
+    this->setAttribArrays(this->invLambert);
+
+    // Draw models
+    this->models.at(0)->sendToShader(this->invLambert);
+    this->models.at(0)->activateTexture(this->invLambert);
+
+    glDrawArrays(GL_TRIANGLES, 0, this->models.at(0)->getVertexCount());
+
+    // Disable inverted Lambertian shading
+    this->disableAttribArrays(this->invLambert);
+}
+
+
+// Render objects using Phong shading
+void App::renderPhongObjects() {
+    this->phong->use();
+
+    this->updateUniforms(this->phong);
+
+    // Enable attributes for Phong shading
+    this->setAttribArrays(this->phong);
+
+    // Disable Phong shading
+    this->disableAttribArrays(this->phong);
+}
+
+
+// Update camera matrices
+void App::updateUniforms(ShaderProgram *sp) {
+    // Calculate View Matrix based on camera position
+    this->V = glm::lookAt(glm::vec3(0.0f, 8.5f, 0.0f), glm::vec3(0.0f, 0.0f, 0.25f), glm::vec3(0.0f, 1.0f, 0.0f));
+    
+    // Send camera to GPU
+    glUniformMatrix4fv(sp->u("P"),1,false,glm::value_ptr(this->P));
+    glUniformMatrix4fv(sp->u("V"),1,false,glm::value_ptr(this->V));
+
+    // Change light based on camera position
+    glUniform4fv(sp->u("lightDir"),1,glm::value_ptr(this->camera.getPosition()));
 }
 
 
@@ -241,27 +299,10 @@ void App::drawScene() {
     // Clear buffers
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-	// Activate shading program
-    this->sp->use();
-
-    // Calculate View Matrix based on camera position
-    this->V = glm::lookAt(glm::vec3(0.0f, 8.5f, 0.0f), glm::vec3(0.0f, 0.0f, 0.25f), glm::vec3(0.0f, 1.0f, 0.0f));
-    
-    // Send camera to GPU
-    glUniformMatrix4fv(this->sp->u("P"),1,false,glm::value_ptr(this->P));
-    glUniformMatrix4fv(this->sp->u("V"),1,false,glm::value_ptr(this->V));
-
-    // Change light based on camera position
-    glUniform4fv(this->sp->u("lightDir"),1,glm::value_ptr(this->camera.getPosition()));
-
-	// Enable attributes
-    this->setAttribArrays();
-
 	// Render objects
-	this->renderObjects();
-
-	// Remove attributes from GPU
-    this->disableAttribArrays();
+	this->renderLambertObjects();
+    this->renderInvertedLambertObjects();
+    this->renderPhongObjects();
 
 	// Swap buffers
     glfwSwapBuffers(this->window);
@@ -276,7 +317,9 @@ void App::init() {
 	glfwSetKeyCallback(this->window, this->keyCallback);
     // Disable mouse
     glfwSetInputMode(this->window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
-	this->sp=new ShaderProgram("vertex_shader.glsl",NULL,"fragment_shader.glsl");
+	this->lambert = new ShaderProgram("standard_vs.glsl", NULL, "standard_fs.glsl");
+    this->invLambert = new ShaderProgram("inverted_vs.glsl", NULL, "standard_fs.glsl");
+    this->phong = new ShaderProgram("phong_vs.glsl", NULL, "phong_fs.glsl");
 }
 
 
@@ -303,18 +346,18 @@ void App::removeModel(int pos) {
 
 
 // Activate attribute arrays in Shader Program
-void App::setAttribArrays() {
-    glEnableVertexAttribArray(this->sp->a("position"));
-	glEnableVertexAttribArray(this->sp->a("texcoord"));
-	glEnableVertexAttribArray(this->sp->a("normal"));
+void App::setAttribArrays(ShaderProgram *sp) {
+    glEnableVertexAttribArray(sp->a("position"));
+	glEnableVertexAttribArray(sp->a("texcoord"));
+	glEnableVertexAttribArray(sp->a("normal"));
 }
 
 
 // Disable attribute arrays in Shader Program
-void App::disableAttribArrays() {
-    glDisableVertexAttribArray(this->sp->a("position"));
-	glDisableVertexAttribArray(this->sp->a("texcoord"));
-	glDisableVertexAttribArray(this->sp->a("normal"));
+void App::disableAttribArrays(ShaderProgram *sp) {
+    glDisableVertexAttribArray(sp->a("position"));
+	glDisableVertexAttribArray(sp->a("texcoord"));
+	glDisableVertexAttribArray(sp->a("normal"));
 }
 
 

@@ -153,8 +153,12 @@ class App {
         // Camera
         Camera camera;
 
-        // Shader program
-        ShaderProgram *sp;
+        // Lambertian shading
+        ShaderProgram *lambert;
+        // Inverted lambertain shading
+        ShaderProgram *invLambert;
+        // Phong shading
+        ShaderProgram *phong;
 
         // View Matrix attributes
         glm::vec3 cameraPosition = glm::vec3(0.0f, 0.0f, -4.0f);
@@ -191,13 +195,16 @@ class App {
         void updateDt();
         static void keyCallback(GLFWwindow* window,int key,int scancode,int action,int mods);
         static void windowResizeCallback(GLFWwindow* window,int width,int height);
-        void renderObjects();
+        void renderLambertObjects();
+        void renderInvertedLambertObjects();
+        void renderPhongObjects();
         void init();
-        void setAttribArrays();
-        void disableAttribArrays();
+        void setAttribArrays(ShaderProgram *sp);
+        void disableAttribArrays(ShaderProgram *sp);
         void move(int direction, int pos);
         void eat(int direction, int pos);
         bool checkCollision();
+        void updateUniforms(ShaderProgram *sp);
 
 
     public:
