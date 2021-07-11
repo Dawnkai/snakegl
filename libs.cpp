@@ -156,6 +156,131 @@ void Model::sendToShader(ShaderProgram *sp) {
 	glVertexAttribPointer(sp->a("normal"), 4, GL_FLOAT, false, 0, this->getNormal());
 }
 
+//-----------------------------------------------------------------------------------------------------------------------------------
+
+//-----------------------------------------------------------------------------------------------------------------------------------
+// SNAKE CLASS
+
+Snake::Snake(Model* snakeHead, Model* snake, int baseLength) {
+    this->length = 1;
+    this->baseLength = baseLength + 1;
+
+    this->snakeHead = snakeHead;
+    this->snakeBody = snake;
+
+    this->snake.push_back(new Model(*this->snakeHead));
+
+    this->extendSnake(baseLength);
+}
+
+Snake::~Snake() {
+
+}
+
+void Snake::extendSnake(int amount) {
+    if(length <= 1) {
+        this->snake.push_back(new Model(*this->snakeBody));
+        amount--;
+        length++;
+    }
+    for(int i = 0; i < amount; i++) {
+        this->snake.push_back(new Model(*this->snake.at(length - 1)));
+    }
+    length += amount;
+}
+
+void Snake::renderSnake(ShaderProgram *sp) {
+    for(int i = 0; i < this->snake.size(); i++) {
+        this->snake.at(i)->sendToShader(sp);
+        this->snake.at(i)->activateTexture(sp);
+
+        if (this->snake.at(i)->getIndexCount() == 0) glDrawArrays(GL_TRIANGLES, 0, this->snake.at(i)->getVertexCount());
+        else glDrawElements(GL_TRIANGLES, this->snake.at(i)->getIndexCount(), GL_UNSIGNED_INT, 0);
+    }
+}
+
+void Snake::move(int direction, int pos) {
+    if(checkCollision()) {
+        std::cout << "Snake collided with wall or himself, you died!" << std::endl;
+        exit(EXIT_SUCCESS);
+    }
+    if(pos == 0) {
+        this->snake.at(pos)->translate(glm::vec3(0.0f, this->velocity, 0.0f));
+        if(direction == 2)
+            this->snake.at(pos)->rotate(glm::vec3(this->angle, 0.0f, 0.0f));
+        if(direction == 3)
+            this->snake.at(pos)->rotate(glm::vec3(-this->angle, 0.0f, 0.0f));
+        if(appleCollision()) {
+            this->randomizeApple();
+            this->animationIndex = 0;
+        }
+        return;
+    }
+    this->snake.at(pos)->setModelMatrix(this->snake.at(pos-1)->getModelMatrix());
+    this->move(direction, pos-1);
+}
+
+void Snake::animation() {
+    if(animationInbound) {
+        this->snake.at(animationIndex)->scale(glm::vec3(0.8f, 0.8f, 0.8f));
+        animationInbound = false;
+        animationIndex++;
+    }
+
+    if(!animationInbound && animationIndex <= this->snake.size() - 1 && animationIndex >= 0) {
+        this->snake.at(animationIndex)->scale(glm::vec3(1.25f, 1.25f, 1.25f));
+        this->animationInbound = true;
+    }
+
+    if(animationIndex == this->snake.size() && !animationInbound) {
+        this->extendSnake(1);
+        this->snake.at(length - 1)->translate(glm::vec3(0.0f, -this->velocity, 0.0f));
+        animationIndex = -1;
+    }
+}
+
+bool Snake::checkCollision() {
+    glm::mat4 head = this->snake.at(0)->getModelMatrix();
+    head = glm::translate(head, glm::vec3(0.0f, this->velocity, 0.0f));
+    bool wallCollision = (abs(head[3][0]) > 5.5 || abs(head[3][2]) > 5.5 );
+    bool snakeCollision = false;
+    for(int i = this->baseLength; i < this->snake.size(); i++)
+        if(abs(head[3][0] - this->snake.at(i)->getModelMatrix()[3][0]) < 0.3 && abs(head[3][2] - this->snake.at(i)->getModelMatrix()[3][2]) < 0.3)
+            snakeCollision = true;
+    return wallCollision || snakeCollision; 
+}
+
+bool Snake::appleCollision() {
+    glm::mat4 modelApple = this->apple->getModelMatrix();
+    glm::mat4 modelSnake = this->snake.at(0)->getModelMatrix();
+    return abs(modelApple[3][0] - modelSnake[3][0]) < 0.35 && abs(modelApple[3][2] - modelSnake[3][2]) < 0.45;
+}
+
+void Snake::randomizeApple() {
+    glm::mat4 apple = this->apple->getModelMatrix();
+    apple[3][0] = rand()%7-3.5;
+    apple[3][2] = rand()%7-3.5;
+    this->apple->setModelMatrix(apple);
+}
+
+void Snake::appleAnimation() {
+    glm::mat4 appleMatrix = apple->getModelMatrix();
+
+    this->apple->rotate(glm::vec3(0.0f, 2.0f, 0.0f));
+
+    if(appleMatrix[3][1] > 1.5) {
+        appleMatrix[3][1] = 1.5;
+        apple->setModelMatrix(appleMatrix);
+        appleTranslation = -appleTranslation;
+
+    } else if(appleMatrix[3][1] < 1) {
+        appleMatrix[3][1] = 1;
+        apple->setModelMatrix(appleMatrix);
+        appleTranslation = -appleTranslation;
+    }
+
+    this->apple->translate(glm::vec3(0.0f, appleTranslation, 0.0f));
+}
 
 //-----------------------------------------------------------------------------------------------------------------------------------
 
@@ -188,7 +313,7 @@ App::App(int width, int height, const char *title) {
 
     // Start GLEW
     GLenum err;
-	if ((err=glewInit()) != GLEW_OK) {
+	if ((err = glewInit()) != GLEW_OK) {
 		fprintf(stderr, "Can't initialize GLEW: %s\n", glewGetErrorString(err));
 		exit(EXIT_FAILURE);
 	}
@@ -215,22 +340,9 @@ void App::renderLambertObjects() {
     // Enable attributes for Lambert shading
     this->setAttribArrays(this->lambert);
 
-    if(arbitralAnimationValue == this->models.size() && !scaled) {
-        this->addModel(new Model(*this->getModel(this->models.size() - 1)));
-        arbitralAnimationValue = 0;
-        move(UP, this->models.size() - 1);
-    }
+    this->snake->animation();
 
-    if(scaled) {
-        this->models.at(arbitralAnimationValue)->scale(glm::vec3(0.8f, 0.8f, 0.8f));
-        scaled = false;
-        arbitralAnimationValue++;
-    }
-
-    if(!scaled && arbitralAnimationValue <= this->models.size() - 1 && arbitralAnimationValue >= 2) {
-        this->models.at(arbitralAnimationValue)->scale(glm::vec3(1.25f, 1.25f, 1.25f));
-        this->scaled = true;
-    }
+    this->snake->renderSnake(this->lambert);
 
     // Draw models
     for (int i = 1; i < this->models.size(); i++) {
@@ -254,6 +366,8 @@ void App::renderInvertedLambertObjects() {
 
     // Enable attributes for inverted Lambert shading
     this->setAttribArrays(this->invLambert);
+
+    this->snake->appleAnimation();
 
     // Draw models
     this->models.at(0)->sendToShader(this->invLambert);
@@ -283,14 +397,16 @@ void App::renderPhongObjects() {
 // Update camera matrices
 void App::updateUniforms(ShaderProgram *sp) {
     // Calculate View Matrix based on camera position
-    this->V = glm::lookAt(glm::vec3(0.0f, 8.5f, 0.0f), glm::vec3(0.0f, 0.0f, 0.25f), glm::vec3(0.0f, 1.0f, 0.0f));
+    if(cameraToggle) this->V = this->camera.getViewMatrix();
+    else this->V = glm::lookAt(glm::vec3(0.0f, 8.5f, 0.0f), glm::vec3(0.0f, 0.0f, 0.25f), glm::vec3(0.0f, 1.0f, 0.0f));
     
     // Send camera to GPU
     glUniformMatrix4fv(sp->u("P"),1,false,glm::value_ptr(this->P));
     glUniformMatrix4fv(sp->u("V"),1,false,glm::value_ptr(this->V));
 
     // Change light based on camera position
-    glUniform4fv(sp->u("lightDir"),1,glm::value_ptr(this->camera.getPosition()));
+    if(cameraToggle) glUniform4fv(sp->u("lightDir"), 1, glm::value_ptr(this->camera.getPosition()));
+    else glUniform4fv(sp->u("lightDir"),1,glm::value_ptr(glm::vec3(0.0f, 0.0f, 1.0f)));
 }
 
 
@@ -365,11 +481,12 @@ void App::disableAttribArrays(ShaderProgram *sp) {
 void App::updateInput() {
     // Poll input
     glfwPollEvents();
-    if (glfwGetKey(this->window, GLFW_KEY_W) == GLFW_PRESS) move(UP, this->models.size() - 1);
-    else if (glfwGetKey(this->window, GLFW_KEY_S) == GLFW_PRESS) move(DOWN, this->models.size() - 1);
-    else if (glfwGetKey(this->window, GLFW_KEY_A) == GLFW_PRESS) move(LEFT, this->models.size() - 1);
-    else if (glfwGetKey(this->window, GLFW_KEY_D) == GLFW_PRESS) move(RIGHT, this->models.size() - 1);
+    if (glfwGetKey(this->window, GLFW_KEY_W) == GLFW_PRESS) this->snake->move(UP, this->snake->getLength() - 1);
+    else if (glfwGetKey(this->window, GLFW_KEY_S) == GLFW_PRESS) this->snake->move(DOWN, this->snake->getLength() - 1);
+    else if (glfwGetKey(this->window, GLFW_KEY_A) == GLFW_PRESS) this->snake->move(LEFT, this->snake->getLength() - 1);
+    else if (glfwGetKey(this->window, GLFW_KEY_D) == GLFW_PRESS) this->snake->move(RIGHT, this->snake->getLength() - 1);
     else if (glfwGetKey(this->window, GLFW_KEY_ESCAPE) == GLFW_PRESS) glfwSetWindowShouldClose(this->window, GL_TRUE);
+    else if (glfwGetKey(this->window, GLFW_KEY_V) == GLFW_PRESS) this->toggleCamera();
 
     // Move camera
     else if (glfwGetKey(this->window, GLFW_KEY_UP) == GLFW_PRESS) this->camera.moveCamera(this->dt, UP);
@@ -410,60 +527,6 @@ void App::updateDt() {
     this->dt = this->curTime - this->lastTime;
     this->lastTime = this->curTime;
 }
-
-
-// Snake movement
-void App::move(int direction, int pos) {
-    if(checkCollision()) {
-        std::cout << "Snake collided with wall or himself, you died!" << std::endl;
-        exit(EXIT_SUCCESS);
-    }
-    if(pos == 2) {
-        this->models.at(pos)->translate(glm::vec3(0.0f, this->velocity, 0.0f));
-        if(direction == 2)
-            this->models.at(pos)->rotate(glm::vec3(this->angle, 0.0f, 0.0f));
-        if(direction == 3)
-            this->models.at(pos)->rotate(glm::vec3(-this->angle, 0.0f, 0.0f));
-        glm::mat4 modelApple = this->models.at(0)->getModelMatrix(), modelSnake = this->models.at(2)->getModelMatrix();
-        if(abs(modelApple[3][0] - modelSnake[3][0]) < 0.35 && abs(modelApple[3][2] - modelSnake[3][2]) < 0.45) {
-            this->randomizeApple();
-            this->arbitralAnimationValue = 2;
-        }
-        return;
-    }
-    this->models.at(pos)->setModelMatrix(this->models.at(pos-1)->getModelMatrix());
-    this->move(direction, pos-1);
-}
-
-
-// Trigger eating animation and change position of apple
-void App::eat(int direction, int pos) {
-    this->randomizeApple();
-    this->arbitralAnimationValue = 2;
-}
-
-
-// Place apple at other random position
-void App::randomizeApple() {
-    glm::mat4 apple = this->models.at(0)->getModelMatrix();
-    apple[3][0] = rand()%7-3.5;
-    apple[3][2] = rand()%7-3.5;
-    this->models.at(0)->setModelMatrix(apple);
-}
-
-
-// Check for snake collisions
-bool App::checkCollision() {
-    glm::mat4 head = this->models.at(2)->getModelMatrix();
-    head = glm::translate(head, glm::vec3(0.0f, this->velocity, 0.0f));
-    bool wallCollision = (abs(head[3][0]) > 5.5 || abs(head[3][2]) > 5.5 );
-    bool snakeCollision = false;
-    for(int i = 6; i < this->models.size(); i++)
-        if(abs(head[3][0] - this->models.at(i)->getModelMatrix()[3][0]) < 0.3 && abs(head[3][2] - this->models.at(i)->getModelMatrix()[3][2]) < 0.3)
-            snakeCollision = true;
-    return wallCollision || snakeCollision; 
-}
-
 
 //-----------------------------------------------------------------------------------------------------------------------------------
 
@@ -527,6 +590,5 @@ void Camera::moveCamera(const float &dt, const int direction) {
             break;
     }
 }
-
 
 //-----------------------------------------------------------------------------------------------------------------------------------
