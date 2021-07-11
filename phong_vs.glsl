@@ -3,27 +3,29 @@
 uniform mat4 P;
 uniform mat4 V;
 uniform mat4 M;
-
-uniform vec4 lp = vec4(0,0,1,0);
+uniform vec4 lightPos=vec4(0,0,1,0);
 
 layout (location=0) in vec4 position;
 layout (location=1) in vec4 normal;
 layout (location=2) in vec2 texcoord;
-layout (location=3) in vec4 color;
 
-out vec4 iColor;
-out vec4 l;
-out vec4 n;
-out vec4 v;
 out vec2 iTC;
+out vec4 iPosition;
+out vec4 iNormal;
+out vec4 viewerPos;
+out vec4 lp;
 
 void main(void) {
-    l = normalize(V * lp - V * M * position);
-    v = normalize(vec4(0,0,0,1) - V * M * position);
-    n = normalize(V * M * normal);
+    gl_Position = P*V*M*position;
 
-    iColor = vec4(1,1,1,1);
+    // FIX for broken .obj files, invert texcoord's Y coordinate
+    vec2 iTexCoord = vec2(texcoord.x, texcoord.y * -1.0f);
 
-    iTC = texcoord;
-    gl_Position = P * V * M * position;
+    iTC = iTexCoord;
+    iPosition = vec4(M * position);
+    iNormal = normal;
+
+    lp = lightPos;
+    viewerPos = normalize(V * lightPos);
+    
 }

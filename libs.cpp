@@ -173,21 +173,24 @@ Snake::Snake(Model* snakeHead, Model* snake, int baseLength) {
     this->extendSnake(baseLength);
 }
 
+
 Snake::~Snake() {
 
 }
+
 
 void Snake::extendSnake(int amount) {
     if(length <= 1) {
         this->snake.push_back(new Model(*this->snakeBody));
         amount--;
-        length++;
+        this->length++;
     }
     for(int i = 0; i < amount; i++) {
-        this->snake.push_back(new Model(*this->snake.at(length - 1)));
+        this->snake.push_back(new Model(*this->snake.at(this->length - 1)));
     }
-    length += amount;
+    this->length += amount;
 }
+
 
 void Snake::renderSnake(ShaderProgram *sp) {
     for(int i = 0; i < this->snake.size(); i++) {
@@ -198,6 +201,7 @@ void Snake::renderSnake(ShaderProgram *sp) {
         else glDrawElements(GL_TRIANGLES, this->snake.at(i)->getIndexCount(), GL_UNSIGNED_INT, 0);
     }
 }
+
 
 void Snake::move(int direction, int pos) {
     if(checkCollision()) {
@@ -220,6 +224,7 @@ void Snake::move(int direction, int pos) {
     this->move(direction, pos-1);
 }
 
+
 void Snake::animation() {
     if(animationInbound) {
         this->snake.at(animationIndex)->scale(glm::vec3(0.8f, 0.8f, 0.8f));
@@ -239,6 +244,7 @@ void Snake::animation() {
     }
 }
 
+
 bool Snake::checkCollision() {
     glm::mat4 head = this->snake.at(0)->getModelMatrix();
     head = glm::translate(head, glm::vec3(0.0f, this->velocity, 0.0f));
@@ -250,11 +256,13 @@ bool Snake::checkCollision() {
     return wallCollision || snakeCollision; 
 }
 
+
 bool Snake::appleCollision() {
     glm::mat4 modelApple = this->apple->getModelMatrix();
     glm::mat4 modelSnake = this->snake.at(0)->getModelMatrix();
     return abs(modelApple[3][0] - modelSnake[3][0]) < 0.35 && abs(modelApple[3][2] - modelSnake[3][2]) < 0.45;
 }
+
 
 void Snake::randomizeApple() {
     glm::mat4 apple = this->apple->getModelMatrix();
@@ -262,6 +270,7 @@ void Snake::randomizeApple() {
     apple[3][2] = rand()%7-3.5;
     this->apple->setModelMatrix(apple);
 }
+
 
 void Snake::appleAnimation() {
     glm::mat4 appleMatrix = apple->getModelMatrix();
@@ -281,6 +290,7 @@ void Snake::appleAnimation() {
 
     this->apple->translate(glm::vec3(0.0f, appleTranslation, 0.0f));
 }
+
 
 //-----------------------------------------------------------------------------------------------------------------------------------
 
@@ -340,18 +350,19 @@ void App::renderLambertObjects() {
     // Enable attributes for Lambert shading
     this->setAttribArrays(this->lambert);
 
-    this->snake->animation();
-
-    this->snake->renderSnake(this->lambert);
-
-    // Draw models
-    for (int i = 1; i < this->models.size(); i++) {
+    // Draw walls
+    for(int i = 0; i < this->models.size(); i++) {
         this->models.at(i)->sendToShader(this->lambert);
         this->models.at(i)->activateTexture(this->lambert);
-
-        if (this->models.at(i)->getIndexCount() == 0) glDrawArrays(GL_TRIANGLES, 0, this->models.at(i)->getVertexCount());
-        else glDrawElements(GL_TRIANGLES, this->models.at(i)->getIndexCount(), GL_UNSIGNED_INT, 0);
+        glDrawArrays(GL_TRIANGLES, 0, this->models.at(i)->getVertexCount());
     }
+
+    // Draw floor
+    this->models.at(5)->sendToShader(this->lambert);
+    this->models.at(5)->activateTexture(this->lambert);
+    
+    if (this->models.at(5)->getIndexCount() == 0) glDrawArrays(GL_TRIANGLES, 0, this->models.at(5)->getVertexCount());
+    else glDrawElements(GL_TRIANGLES, this->models.at(5)->getIndexCount(), GL_UNSIGNED_INT, 0);
 
     // Remove attributes from GPU
     this->disableAttribArrays(this->lambert);
@@ -368,15 +379,19 @@ void App::renderInvertedLambertObjects() {
     this->setAttribArrays(this->invLambert);
 
     this->snake->appleAnimation();
+    this->snake->animation();
 
-    // Draw models
+    // Draw snake
+    this->snake->renderSnake(this->lambert);
+
+    // Draw apple
     this->models.at(0)->sendToShader(this->invLambert);
     this->models.at(0)->activateTexture(this->invLambert);
 
     glDrawArrays(GL_TRIANGLES, 0, this->models.at(0)->getVertexCount());
 
-    // Disable inverted Lambertian shading
-    this->disableAttribArrays(this->invLambert);
+    // Remove attributes from GPU
+    this->disableAttribArrays(this->lambert);
 }
 
 
@@ -434,7 +449,7 @@ void App::init() {
     // Disable mouse
     glfwSetInputMode(this->window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
 	this->lambert = new ShaderProgram("standard_vs.glsl", NULL, "standard_fs.glsl");
-    this->invLambert = new ShaderProgram("inverted_vs.glsl", NULL, "standard_fs.glsl");
+    this->invLambert = new ShaderProgram("inverted_vs.glsl", NULL, "inverted_fs.glsl");
     this->phong = new ShaderProgram("phong_vs.glsl", NULL, "phong_fs.glsl");
 }
 
