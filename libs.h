@@ -6,7 +6,7 @@
 #define FAR_PLANE 50.0f
 #define FOV 90.0f
 #define ASPECT_RATIO 1.0f
-#define MOVEMENT_SPEED 0.50f
+#define MOVEMENT_SPEED 2.50f
 #define SENSITIVITY 10.0f
 
 #include <GL/glew.h>
@@ -118,7 +118,7 @@ class Camera {
         glm::mat4 viewMatrix = glm::mat4(1.0f);
 
         glm::vec3 worldUp = glm::vec3(0.0f, 1.0f, 0.0f);
-        glm::vec3 position = glm::vec3(0.0f, 0.0f, 1.0f);
+        glm::vec3 position = glm::vec3(0.0f, 8.0f, 0.0f);
         glm::vec3 front;
         glm::vec3 right = glm::vec3(0.0f);
         glm::vec3 up = glm::vec3(0.0f, 1.0f, 0.0f);
@@ -140,6 +140,43 @@ class Camera {
         void moveCamera(const float &dt, const int direction);
 };
 
+class Snake {
+    private:
+        int length;
+        int baseLength;
+        int animationIndex = -1;
+        float velocity = 0.2f;
+        float angle = 22.0f;
+        float appleTranslation = 0.001f;
+        std::vector<Model*> snake;
+
+        bool animationInbound = false;
+
+        Model* snakeHead;
+        Model* snakeBody;
+        Model* apple;
+
+        bool appleCollision();
+        bool checkCollision();
+
+    public:
+        Snake(Model* snakeHead, Model* snake, int baseLength);
+        ~Snake();
+
+        void extendSnake(int amount);
+        void renderSnake(ShaderProgram *sp);
+        void move(int direction, int pos);
+        void randomizeApple();
+        void animation();
+        void appleAnimation();
+
+        void addApple(Model* apple) { this->apple = apple; }
+
+        bool getAnimationStatus() { return this->animationInbound; }
+        int getAnimationIndex() { return this->animationIndex; }
+        int getLength() { return this->length; }
+        
+};
 
 class App {
     private:
@@ -149,6 +186,9 @@ class App {
 
         // All models
         std::vector<Model*> models;
+
+        // Snake
+        Snake *snake;
 
         // Camera
         Camera camera;
@@ -188,9 +228,7 @@ class App {
         double mouseOffsetY = 0.0f;
         bool firstMouse = true;
 
-        float velocity = 0.2f;
-        float angle = 22.0f;
-
+        bool cameraToggle = false;
 
         void updateDt();
         static void keyCallback(GLFWwindow* window,int key,int scancode,int action,int mods);
@@ -201,11 +239,8 @@ class App {
         void init();
         void setAttribArrays(ShaderProgram *sp);
         void disableAttribArrays(ShaderProgram *sp);
-        void move(int direction, int pos);
-        void eat(int direction, int pos);
-        bool checkCollision();
         void updateUniforms(ShaderProgram *sp);
-
+        void toggleCamera() { cameraToggle = !cameraToggle; };
 
     public:
         App(int width, int height, const char *title);
@@ -216,8 +251,9 @@ class App {
         Model *getModel(int pos) { return this->models.at(pos); }
         void addModel(Model *model) { this->models.push_back(model); }
         void removeModel(int pos);
+        
+        void addSnake(Snake *snake) { this->snake = snake; }
 
-        int getArbitralValue() { return this->arbitralAnimationValue; }
         int getAmountOfModels() { return this->models.size(); }
  
         void setCamera(glm::mat4 viewMatrix, glm::mat4 projectionMatrix) {
@@ -228,7 +264,6 @@ class App {
         void drawScene();
         void updateInput();
         void updateMouse();
-        void randomizeApple();
 };
 
 
