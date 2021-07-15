@@ -23,7 +23,7 @@ void main(void) {
 
     iTC = iTexCoord;
     iPosition = vec4(M * position);
-    iNormal = normal;
+    iNormal = normalize(normal);
 
     lp = lightPos;
     viewerPos = normalize(V * lightPos);

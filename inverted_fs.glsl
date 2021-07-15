@@ -2,7 +2,7 @@
 
 uniform sampler2D tex;
 uniform float ambientStrength = 0.4;
-uniform vec4 lightPos=vec4(1,0,1,0);
+uniform vec4 lightPos=vec4(0,1,0,0);
 
 out vec4 pixelColor;
 
@@ -30,7 +30,6 @@ vec4 calculateColor(vec3 normals, vec4 color, vec4 lightPos, vec3 position, floa
 
 
 void main(void) {
-	vec4 ambientLight = vec4(1,1,1,1);
 	vec4 color = texture(tex,iTC);
 	pixelColor = calculateColor(iNormal.xyz, color, lightPos, iPosition.xyz, ambientStrength);
 }

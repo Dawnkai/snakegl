@@ -19,7 +19,7 @@ vec3 calculateAmbient(vec4 color, float ambientConstant) {
 
 vec3 calculateDiffuse(vec3 normals, vec4 color, vec4 lightPos, vec3 position) {
     vec3 direction = normalize(lightPos.xyz - position);
-    float diffuseConstant = max(dot(normalize(normals), direction), 0.0);
+    float diffuseConstant = max(normals, direction), 0.0);
     return vec3(color.xyz * diffuseConstant);
 }
 
@@ -42,7 +42,6 @@ vec4 calculateColor(vec3 normals, vec4 color, vec4 lightPos, vec3 position, floa
 
 
 void main(void) {
-	vec4 ambientLight = vec4(1,1,1,1);
 	vec4 color = texture(tex,iTC);
 	pixelColor = calculateColor(iNormal.xyz, color, lp, iPosition.xyz, ambientStrength, viewerPos, specularStrength);
 }

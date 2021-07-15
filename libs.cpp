@@ -384,10 +384,6 @@ void App::renderInvertedLambertObjects() {
     // Draw snake
     this->snake->renderSnake(this->lambert);
 
-    // Draw apple
-    this->models.at(0)->sendToShader(this->invLambert);
-    this->models.at(0)->activateTexture(this->invLambert);
-
     glDrawArrays(GL_TRIANGLES, 0, this->models.at(0)->getVertexCount());
 
     // Remove attributes from GPU
@@ -403,6 +399,10 @@ void App::renderPhongObjects() {
 
     // Enable attributes for Phong shading
     this->setAttribArrays(this->phong);
+
+    // Draw apple
+    this->models.at(0)->sendToShader(this->phong);
+    this->models.at(0)->activateTexture(this->phong);
 
     // Disable Phong shading
     this->disableAttribArrays(this->phong);
