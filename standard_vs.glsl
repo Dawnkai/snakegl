@@ -11,8 +11,6 @@ layout (location=3) in vec4 applePos;
 layout (location=4) in vec4 snakePos;
 
 out vec2 iTC;
-out vec4 downLight;
-out vec4 upLight;
 out vec3 iPosition;
 out vec4 iNormal;
 
@@ -22,6 +20,4 @@ void main(void) {
     iPosition = vec3(M * position);
     iNormal = normalize(normal);    
     iTC = texcoord;
-    downLight = vec4(0,1,-5,0);
-    upLight = vec4(0,1,4.5,0);
 }
