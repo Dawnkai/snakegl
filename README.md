@@ -54,4 +54,4 @@ If you want to contribute to this repository, fork it and adapt it to your needs
 * [nudelkopf](https://www.cgtrader.com/free-3d-print-models/house/decor/hardsurface-padding-cylinder) - for snake body model
 * [glm](https://github.com/g-truc/glm) - for simplifying model calculations
 * [wallpaperflare](https://www.wallpaperflare.com/snakeskin-illustration-texture-scales-leather-colors-pattern-wallpaper-avas) - for snake head texture
-* [Trollinho](https://unsplash.com/photos/NABW57T7dBo?utm_source=unsplash&utm_medium=referral&utm_content=creditShareLink) - for snake body texture
+* [wallpaper-house](https://wallpaper-house.com/wallpaper-id-295361.php) - for snake skin texture

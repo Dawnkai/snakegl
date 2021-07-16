@@ -42,7 +42,7 @@ int main(void)
 	snakeHead->rotate(glm::vec3(0,0,90));
 	snakeHead->scale(glm::vec3(2.0f, 2.0f, 2.0f));
 
-	Model *snakeBody = new Model("cylinder.obj", "snake.png");
+	Model *snakeBody = new Model("cylinder.obj", "skin.png");
 	snakeBody->rotate(glm::vec3(0, 0, 90));
 	snakeBody->scale(glm::vec3(2.0f, 2.0f, 2.0f));
 	
