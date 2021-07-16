@@ -148,6 +148,7 @@ class Snake {
         float velocity = 0.2f;
         float angle = 22.0f;
         float appleTranslation = 0.001f;
+        glm::vec4 applePos = glm::vec4(0.0f, 1.0f, 0.0f, 1.0f);
         std::vector<Model*> snake;
 
         bool animationInbound = false;
@@ -175,6 +176,7 @@ class Snake {
         bool getAnimationStatus() { return this->animationInbound; }
         int getAnimationIndex() { return this->animationIndex; }
         int getLength() { return this->length; }
+        glm::vec4 getApplePos() { return this->applePos; }
         
 };
 
