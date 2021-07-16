@@ -268,6 +268,8 @@ void Snake::randomizeApple() {
     glm::mat4 apple = this->apple->getModelMatrix();
     apple[3][0] = rand()%7-3.5;
     apple[3][2] = rand()%7-3.5;
+    this->applePos.x = apple[3][0];
+    this->applePos.z = apple[3][2];
     this->apple->setModelMatrix(apple);
 }
 
@@ -349,6 +351,8 @@ void App::renderLambertObjects() {
 
     // Enable attributes for Lambert shading
     this->setAttribArrays(this->lambert);
+
+    glUniform4fv(this->lambert->u("centerLight"), 1, glm::value_ptr(this->snake->getApplePos()));
 
     // Draw walls
     for(int i = 0; i < this->models.size(); i++) {
